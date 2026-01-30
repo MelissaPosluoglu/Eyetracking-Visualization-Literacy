@@ -32,13 +32,6 @@ Dieses Projekt verwendet **Python 3.11**.
 
 ## ⚙️ Setup (virtuelle Umgebung)
 
-### 1️⃣ Repository klonen
-
-```bash
-git clone https://github.com/MelissaPosluoglu/mini-vlat-eyetracking.git
-cd mini-vlat-eyetracking
-```
-
 ### 2️⃣ Virtuelle Umgebung erstellen
 ```bash
 python -m venv .venv
