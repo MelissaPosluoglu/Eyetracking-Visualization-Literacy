@@ -3,158 +3,97 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import matplotlib
 import os
-import re
+import numpy as np
 
 # ----------------------------------------------------
-# 1. Matplotlib backend configuration
+# Non-interactive backend
 # ----------------------------------------------------
-# The "TkAgg" backend ensures that plots open in a separate window
-# when using IDEs such as PyCharm or IntelliJ.
-matplotlib.use("TkAgg")
+matplotlib.use("Agg")
 
 # ----------------------------------------------------
-# 2. Configuration
+# Configuration
 # ----------------------------------------------------
-# Change this value to the desired participant (e.g., "participant1.tsv", "participant2.tsv", ...).
-DATA_FILE = "../data/eyetracking.tsv"
-IMAGE_DIR = "../data/"
-# Base directory for all results
-RESULTS_BASE_DIR = "../results/testA"
+PARTICIPANT = "Participant4"
+QUESTION_ID = 10
 
-# Change this value to the desired participant (e.g., "Participant1", "Participant2", ...).
-PARTICIPANT = "Participant13"
+DATA_FILE = os.path.join("..", "..", "data", "testA", f"{PARTICIPANT}.tsv")
+IMAGE_PATH = os.path.join("..", "..", "data", "testA", "stimuli", f"Question{QUESTION_ID}.png")
+OUTPUT_DIR = os.path.join("..", "..", "results", "testA", PARTICIPANT.lower(), "debug_clean")
 
-# Output directory for the currently selected participant
-OUTPUT_DIR = os.path.join(
-    RESULTS_BASE_DIR,
-    PARTICIPANT.lower()
-)
-
-# Create output directory if it does not exist
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ----------------------------------------------------
-# 3. Load eye-tracking TSV file
+# Load TSV
 # ----------------------------------------------------
 df = pd.read_csv(DATA_FILE, sep="\t", low_memory=False)
 
-# Convert Tobii recording timestamps (usually in milliseconds) to numeric values
-df["Recording timestamp"] = pd.to_numeric(
-    df["Recording timestamp"], errors="coerce"
+fix = df[df["Eye movement type"] == "Fixation"].copy()
+print(f"Total fixations in file: {len(fix)}")
+
+# OPTIONAL: limit for visualization (keeps temporal order!)
+MAX_FIX = 6000
+if len(fix) > MAX_FIX:
+    fix = fix.iloc[:MAX_FIX]
+
+# ----------------------------------------------------
+# Load stimulus
+# ----------------------------------------------------
+img = Image.open(IMAGE_PATH)
+w, h = img.size
+
+fix["X_px"] = fix["Fixation point X (MCSnorm)"] * w
+fix["Y_px"] = fix["Fixation point Y (MCSnorm)"] * h
+
+# ----------------------------------------------------
+# Normalize time & duration
+# ----------------------------------------------------
+t = fix["Recording timestamp"].to_numpy()
+t_norm = (t - t.min()) / (t.max() - t.min())
+
+dur = fix["Gaze event duration"].to_numpy()
+dur_clipped = np.clip(dur, 40, 400)   # cap extremes
+size = dur_clipped / 12
+
+# ----------------------------------------------------
+# Plot
+# ----------------------------------------------------
+fig, ax = plt.subplots(figsize=(6, 9))
+
+ax.imshow(img, extent=[0, w, h, 0])
+ax.set_xlim(0, w)
+ax.set_ylim(h, 0)
+
+sc = ax.scatter(
+    fix["X_px"],
+    fix["Y_px"],
+    s=size,
+    c=t_norm,
+    cmap="viridis",
+    alpha=0.25,          # KEY: calm visualization
+    edgecolors="none"
 )
 
-# ----------------------------------------------------
-# 4. Extract URL Start / URL End events for task segmentation
-# ----------------------------------------------------
-events = df[
-    df["Event"].isin(["URL Start", "URL End"])
-][["Participant name", "Event", "Event value", "Recording timestamp"]].copy()
-
-# Keep only events for the selected participant
-events = events[events["Participant name"] == PARTICIPANT]
-
-# Extract question number from the event value (e.g., "Question 3 – Treemap")
-def extract_question_number(text):
-    match = re.search(r"Question\s+(\d+)", str(text))
-    return int(match.group(1)) if match else None
-
-events["question_id"] = events["Event value"].apply(extract_question_number)
-events = events.dropna(subset=["question_id"])
-
-# Separate URL Start and URL End timestamps
-starts = events[events["Event"] == "URL Start"] \
-    .rename(columns={"Recording timestamp": "start_time"})
-
-ends = events[events["Event"] == "URL End"] \
-    .rename(columns={"Recording timestamp": "end_time"})
-
-# Merge start and end times to obtain time windows per question
-questions = starts.merge(
-    ends,
-    on=["Participant name", "Event value", "question_id"],
-    how="inner"
+ax.set_title(
+    f"{PARTICIPANT} – All Fixations (Clean Debug, Question {QUESTION_ID})",
+    fontsize=13
 )
 
-# Sort questions by their numeric order
-questions = questions.sort_values("question_id")
+ax.set_xlabel("X (pixels)")
+ax.set_ylabel("Y (pixels)")
+
+# Subtle colorbar
+cbar = fig.colorbar(sc, ax=ax, fraction=0.03, pad=0.015)
+cbar.set_label("Time progression")
 
 # ----------------------------------------------------
-# 5. Extract fixation events
+# Save
 # ----------------------------------------------------
-fix = df[
-    (df["Participant name"] == PARTICIPANT) &
-    (df["Eye movement type"] == "Fixation")
-    ].copy()
+out_path = os.path.join(
+    OUTPUT_DIR,
+    f"{PARTICIPANT}_Question{QUESTION_ID}_ALL_FIXATIONS_CLEAN.png"
+)
 
-# ----------------------------------------------------
-# 6. Assign each fixation to a question based on timestamps
-# ----------------------------------------------------
-def assign_question(row, q_df):
-    hit = q_df[
-        (row["Recording timestamp"] >= q_df["start_time"]) &
-        (row["Recording timestamp"] <= q_df["end_time"])
-        ]
-    if len(hit) == 1:
-        return int(hit.iloc[0]["question_id"])
-    return None
+plt.savefig(out_path, dpi=300, bbox_inches="tight")
+plt.close()
 
-fix["question_id"] = fix.apply(assign_question, axis=1, q_df=questions)
-fix = fix.dropna(subset=["question_id"])
-fix["question_id"] = fix["question_id"].astype(int)
-
-# ----------------------------------------------------
-# 7. Generate fixation visualizations for all 12 questions
-# ----------------------------------------------------
-for q in range(1, 13):
-    print(f"▶ Processing Question {q}")
-
-    # Select fixations belonging to the current question
-    fix_q = fix[fix["question_id"] == q].copy()
-
-    if fix_q.empty:
-        print(f"  ⚠ No fixations found for Question {q}")
-        continue
-
-    # Load the corresponding stimulus image
-    img_path = os.path.join(IMAGE_DIR, f"Question{q}.PNG")
-    if not os.path.exists(img_path):
-        print(f"  ❌ Stimulus image missing: Question{q}.PNG")
-        continue
-
-    img = Image.open(img_path)
-    w, h = img.size
-
-    # Convert normalized fixation coordinates to pixel coordinates
-    fix_q["X_px"] = fix_q["Fixation point X (MCSnorm)"] * w
-    fix_q["Y_px"] = fix_q["Fixation point Y (MCSnorm)"] * h
-
-    # ------------------------------------------------
-    # Plot fixations on top of the stimulus image
-    # ------------------------------------------------
-    plt.figure(figsize=(6, 6))
-    plt.imshow(img, extent=[0, w, 0, h])
-
-    plt.scatter(
-        fix_q["X_px"],
-        h - fix_q["Y_px"],                 # Invert Y-axis to match image coordinates
-        s=fix_q["Gaze event duration"] / 5,  # Scale marker size by fixation duration
-        c="red",
-        alpha=0.6,
-        edgecolors="white"
-    )
-
-    plt.title(f"{PARTICIPANT} – Question {q}", fontsize=14)
-    plt.xlim(0, w)
-    plt.ylim(0, h)
-    plt.axis("off")
-    plt.tight_layout()
-
-    # Save the fixation plot
-    out_path = os.path.join(
-        OUTPUT_DIR,
-        f"{PARTICIPANT}_Question{q}_Fixations.png"
-    )
-    plt.savefig(out_path, dpi=200)
-    plt.show()
-
-print("✅ Fixation visualization for all 12 questions completed.")
+print("✅ Clean debug fixation plot saved.")
