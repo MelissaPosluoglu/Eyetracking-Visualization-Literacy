@@ -13,8 +13,8 @@ matplotlib.use("Agg")
 # ----------------------------------------------------
 # Configuration
 # ----------------------------------------------------
-PARTICIPANT = "Participant4"
-QUESTION_ID = 10
+PARTICIPANT = "Participant2"
+QUESTION_ID = 2
 
 DATA_FILE = os.path.join("..", "..", "data", "testA", f"{PARTICIPANT}.tsv")
 IMAGE_PATH = os.path.join("..", "..", "data", "testA", "stimuli", f"Question{QUESTION_ID}.png")
@@ -27,13 +27,54 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # ----------------------------------------------------
 df = pd.read_csv(DATA_FILE, sep="\t", low_memory=False)
 
-fix = df[df["Eye movement type"] == "Fixation"].copy()
-print(f"Total fixations in file: {len(fix)}")
+# ----------------------------------------------------
+# Find time window for this Question (via Event value)
+# ----------------------------------------------------
+events = df[df["Event value"].str.contains("Question", na=False)]
+events = events.sort_values("Recording timestamp")
 
-# OPTIONAL: limit for visualization (keeps temporal order!)
+current_event = events[
+    events["Event value"].str.contains(f"Question {QUESTION_ID}", na=False)
+]
+
+if current_event.empty:
+    print(f"⚠️ Question {QUESTION_ID} not found in Event value")
+    exit()
+
+start_time = current_event["Recording timestamp"].iloc[0]
+
+# end = start of next Question (if exists)
+current_idx = current_event.index[0]
+next_events = events[events.index > current_idx]
+
+if not next_events.empty:
+    end_time = next_events["Recording timestamp"].iloc[0]
+else:
+    end_time = df["Recording timestamp"].max()
+
+# ----------------------------------------------------
+# Filter fixations in this time window
+# ----------------------------------------------------
+fix = df[
+    (df["Eye movement type"] == "Fixation") &
+    (df["Recording timestamp"] >= start_time) &
+    (df["Recording timestamp"] <= end_time)
+    ].copy()
+
+print(f"Fixations for Question {QUESTION_ID}: {len(fix)}")
+print(fix["Eye movement type index"].nunique())
+
+
+if fix.empty:
+    print("⚠️ No fixations in this time window")
+    exit()
+
+# ----------------------------------------------------
+# OPTIONAL: limit for visualization
+# ----------------------------------------------------
 MAX_FIX = 6000
 if len(fix) > MAX_FIX:
-    fix = fix.iloc[:MAX_FIX]
+    fix = fix.sort_values("Recording timestamp").iloc[:MAX_FIX]
 
 # ----------------------------------------------------
 # Load stimulus
@@ -51,49 +92,56 @@ t = fix["Recording timestamp"].to_numpy()
 t_norm = (t - t.min()) / (t.max() - t.min())
 
 dur = fix["Gaze event duration"].to_numpy()
-dur_clipped = np.clip(dur, 40, 400)   # cap extremes
+dur_clipped = np.clip(dur, 40, 400)
 size = dur_clipped / 12
 
 # ----------------------------------------------------
 # Plot
 # ----------------------------------------------------
-fig, ax = plt.subplots(figsize=(6, 9))
+# ----------------------------------------------------
+# Plot (visual-quality version)
+# ----------------------------------------------------
+# ----------------------------------------------------
+# Plot (FINAL, CLEAN, READABLE)
+# ----------------------------------------------------
 
-ax.imshow(img, extent=[0, w, h, 0])
-ax.set_xlim(0, w)
-ax.set_ylim(h, 0)
+# Figure size proportional to image
+dpi = 100
+fig_w = w / dpi
+fig_h = h / dpi
+
+fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
+
+ax.imshow(img)
+ax.axis("off")
 
 sc = ax.scatter(
     fix["X_px"],
     fix["Y_px"],
-    s=size,
-    c=t_norm,
-    cmap="viridis",
-    alpha=0.25,          # KEY: calm visualization
-    edgecolors="none"
+    s=size * 10.0,
+    color = "#b22222",   # firebrick
+alpha=0.5
 )
+
 
 ax.set_title(
-    f"{PARTICIPANT} – All Fixations (Clean Debug, Question {QUESTION_ID})",
-    fontsize=13
+    f"{PARTICIPANT} – Question {QUESTION_ID}",
+    fontsize=18,
+    pad=20
 )
 
-ax.set_xlabel("X (pixels)")
-ax.set_ylabel("Y (pixels)")
+plt.tight_layout()
 
-# Subtle colorbar
-cbar = fig.colorbar(sc, ax=ax, fraction=0.03, pad=0.015)
-cbar.set_label("Time progression")
 
 # ----------------------------------------------------
 # Save
 # ----------------------------------------------------
 out_path = os.path.join(
     OUTPUT_DIR,
-    f"{PARTICIPANT}_Question{QUESTION_ID}_ALL_FIXATIONS_CLEAN.png"
+    f"{PARTICIPANT}_Question{QUESTION_ID}_FIXATIONS.png"
 )
 
 plt.savefig(out_path, dpi=300, bbox_inches="tight")
 plt.close()
 
-print("✅ Clean debug fixation plot saved.")
+print("✅ Fixation plot saved successfully.")
