@@ -13,8 +13,8 @@ matplotlib.use("Agg")
 # ----------------------------------------------------
 # Configuration
 # ----------------------------------------------------
-PARTICIPANT = "Participant13"
-QUESTION_ID = 12  # <<< hier wechseln (z.B. 1 oder 12)
+PARTICIPANT = "Participant2"
+QUESTION_ID = 7  # <<< hier wechseln (z.B. 1 oder 12)
 
 DATA_FILE = os.path.join(
     "..", "..", "data", "testA", f"{PARTICIPANT}.tsv"
