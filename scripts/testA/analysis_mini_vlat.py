@@ -15,11 +15,11 @@ from reportlab.lib.units import inch
 # 1️⃣ Alle TSV-Dateien finden
 # ---------------------------------------------------
 
-folder_path = "data/testA/"
+folder_path = "../../data/testA/"
 files = glob.glob(os.path.join(folder_path, "*.tsv"))
 # Scores laden
-scores_df = pd.read_csv("data/testA/scores.csv")
-answers_df = pd.read_csv("data/testA/answers.csv")
+scores_df = pd.read_csv("../../data/testA//scores.csv")
+answers_df = pd.read_csv("../../data/testA/answers.csv")
 
 
 all_results = []
@@ -115,6 +115,9 @@ result_df = pd.DataFrame(all_results, columns=[
     "Mean_Fix_ms",
     "Total_Dwell_ms"
 ])
+result_df["Visualization"] = result_df["Question"].str.replace(
+    r"Question \d+ – ", "", regex=True
+)
 
 participants = result_df["Participant"].unique()
 
@@ -230,66 +233,35 @@ doc.build(elements)
 print("Structured PDF created:", pdf_file)
 
 # ---------------------------------------------------
-# 4️⃣ Visualisierungs-PDF erstellen
+# 4️⃣ Repeated Measures ANOVA
 # ---------------------------------------------------
 
-import matplotlib.pyplot as plt
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.units import inch
-from reportlab.lib.pagesizes import A4
+import pingouin as pg
 
-visual_pdf = "All_Participants_Visualizations.pdf"
-doc = SimpleDocTemplate(visual_pdf, pagesize=A4)
-elements = []
+# Sicherstellen, dass jede Person jede Visualisierung hat
+check = result_df.groupby(["Participant", "Visualization"]).size()
+print("\nCheck counts per cell:\n", check)
 
-styles = getSampleStyleSheet()
+# ANOVA berechnen
+anova = pg.rm_anova(
+    data=result_df,
+    dv="Mean_Fix_ms",
+    within="Visualization",
+    subject="Participant",
+    detailed=True
+)
 
-# ----------------------------
-# 1. Durchschnitt pro Participant
-# ----------------------------
+print("\nRepeated Measures ANOVA Result:\n")
+print(anova)
 
-avg_per_participant = result_df.groupby("Participant")["Mean_Fix_ms"].mean()
+# Optional: Post-hoc Tests
+posthoc = pg.pairwise_tests(
+    data=result_df,
+    dv="Mean_Fix_ms",
+    within="Visualization",
+    subject="Participant",
+    padjust="bonf"
+)
 
-plt.figure()
-plt.bar(avg_per_participant.index, avg_per_participant.values)
-plt.xlabel("Participant")
-plt.ylabel("Average Mean Fixation Duration (ms)")
-plt.title("Average Mean Fixation Duration per Participant")
-plt.xticks(rotation=45)
-plt.tight_layout()
-
-chart1_path = "avg_per_participant.png"
-plt.savefig(chart1_path)
-plt.close()
-
-elements.append(Paragraph("Average Mean Fixation Duration per Participant", styles["Heading1"]))
-elements.append(Spacer(1, 0.3 * inch))
-elements.append(Image(chart1_path, width=6*inch, height=4*inch))
-elements.append(PageBreak())
-
-# ----------------------------
-# 2. Durchschnitt pro Visualization
-# ----------------------------
-
-avg_per_question = result_df.groupby("Question")["Mean_Fix_ms"].mean()
-
-plt.figure()
-plt.bar(avg_per_question.index, avg_per_question.values)
-plt.xlabel("Visualization")
-plt.ylabel("Average Mean Fixation Duration (ms)")
-plt.title("Average Mean Fixation Duration per Visualization")
-plt.xticks(rotation=45)
-plt.tight_layout()
-
-chart2_path = "avg_per_visualization.png"
-plt.savefig(chart2_path)
-plt.close()
-
-elements.append(Paragraph("Average Mean Fixation Duration per Visualization", styles["Heading1"]))
-elements.append(Spacer(1, 0.3 * inch))
-elements.append(Image(chart2_path, width=6*inch, height=4*inch))
-
-doc.build(elements)
-
-print("Visualization PDF created:", visual_pdf)
+print("\nPost-hoc comparisons:\n")
+print(posthoc)
