@@ -14,7 +14,7 @@ matplotlib.use("Agg")
 # Configuration
 # ----------------------------------------------------
 PARTICIPANT = "Participant8"
-QUESTION_ID = 7
+QUESTION_ID = 5
 
 DATA_FILE = os.path.join("..", "..", "data", "testA", f"{PARTICIPANT}.tsv")
 IMAGE_PATH = os.path.join("..", "..", "data", "testA", "stimuli", f"Question{QUESTION_ID}.png")
