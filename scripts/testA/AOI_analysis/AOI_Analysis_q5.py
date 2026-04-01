@@ -17,7 +17,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "results", "testA")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-PARTICIPANTS = ["Participant21"]
+PARTICIPANTS = ["Participant1"]
 
 # ============================================================
 # 🔥 FINAL PIE SETTINGS (FEINJUSTIERT)
