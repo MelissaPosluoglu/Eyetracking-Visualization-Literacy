@@ -13,8 +13,8 @@ matplotlib.use("Agg")
 # ----------------------------------------------------
 # Configuration
 # ----------------------------------------------------
-PARTICIPANT = "Participant2"
-QUESTION_ID = 7
+PARTICIPANT = "Participant21"
+QUESTION_ID = 1
 
 DATA_FILE = os.path.join(
     "..", "..", "data", "testA", f"{PARTICIPANT}.tsv"
@@ -26,7 +26,7 @@ IMAGE_PATH = os.path.join(
 
 OUTPUT_DIR = os.path.join(
     "..", "..", "results", "testA",
-    PARTICIPANT.lower(), "saccades_clean"
+    PARTICIPANT.lower(), "saccades"
 )
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

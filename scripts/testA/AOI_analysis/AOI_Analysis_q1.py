@@ -9,14 +9,14 @@ from PIL import Image
 # PATHS
 # ============================================================
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA_PATH = os.path.join(BASE_DIR, "data", "testA")
 STIM_PATH = os.path.join(DATA_PATH, "stimuli")
 OUTPUT_DIR = os.path.join(BASE_DIR, "results", "testA")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-PARTICIPANTS = ["Participant5"]
+PARTICIPANTS = ["Participant4"]
 
 # ============================================================
 # AOIs (Q1 FINAL)
