@@ -17,19 +17,17 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "results", "testA")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-PARTICIPANTS = ["Participant1"]
+PARTICIPANTS = ["Participant27"]
 
 # ============================================================
-# 🔥 FINAL PIE SETTINGS (FEINJUSTIERT)
+# FINAL PIE SETTINGS
 # ============================================================
 
-CENTER_X = 0.5   # leicht nach links
+CENTER_X = 0.5
 CENTER_Y = 0.44
-RADIUS   = 0.127
+RADIUS = 0.127
 
-# Winkel (0° = oben, durch Rotation korrigiert)
 PIE_SEGMENTS = []
-
 current_angle = 0
 
 def add_segment(name, size):
@@ -39,13 +37,12 @@ def add_segment(name, size):
     PIE_SEGMENTS.append({"name": name, "start": start, "end": end})
     current_angle = end
 
-# Reihenfolge im Uhrzeigersinn (wie im Bild!)
 add_segment("others", 115)
 add_segment("samsung", 64)
 add_segment("xiaomi", 56)
 add_segment("apple", 54)
 add_segment("oppo", 37)
-add_segment("vivo", 33)  # leicht angepasst damit = 360
+add_segment("vivo", 33)
 
 # ============================================================
 # UI AOIs
@@ -66,7 +63,6 @@ def extract_question_id(event_value):
     m = re.search(r"Question\s+(\d+)", str(event_value))
     return int(m.group(1)) if m else None
 
-
 def get_fixations_for_question(df, question_label):
 
     url_events = df[
@@ -77,25 +73,25 @@ def get_fixations_for_question(df, question_label):
     if len(url_events) < 2:
         return None, None
 
-    t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
-    t_end   = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
+    t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp [ms]"].min()
+    t_end = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp [ms]"].max()
 
     duration = (t_end - t_start) / 1000
 
     fix = df[
         (df["Eye movement type"] == "Fixation") &
-        (df["Recording timestamp"].between(t_start, t_end))
+        (df["Recording timestamp [ms]"].between(t_start, t_end))
         ].copy()
 
     fix = fix[
-        (fix["Fixation point X (MCSnorm)"].between(0, 1)) &
-        (fix["Fixation point Y (MCSnorm)"].between(0, 1))
+        (fix["Fixation point X [MCS norm]"].between(0, 1)) &
+        (fix["Fixation point Y [MCS norm]"].between(0, 1))
         ]
 
-    return fix.sort_values("Recording timestamp").reset_index(drop=True), duration
+    return fix.sort_values("Recording timestamp [ms]").reset_index(drop=True), duration
 
 # ============================================================
-# 🔥 ANGLE FUNCTION (MIT KORREKTER ROTATION)
+# ANGLE FUNCTION
 # ============================================================
 
 def get_angle(x, y):
@@ -106,13 +102,11 @@ def get_angle(x, y):
     if angle < 0:
         angle += 360
 
-    # 🔥 WICHTIG: Richtung drehen → Uhrzeigersinn
     angle = (360 - angle + 90) % 360
-
     return angle
 
 # ============================================================
-# AOI MAPPING (ECHTE PIE SEGMENTE)
+# AOI MAPPING
 # ============================================================
 
 def map_aois(fix):
@@ -121,18 +115,15 @@ def map_aois(fix):
 
     for _, row in fix.iterrows():
 
-        x = row["Fixation point X (MCSnorm)"]
-        y = row["Fixation point Y (MCSnorm)"]
+        x = row["Fixation point X [MCS norm]"]
+        y = row["Fixation point Y [MCS norm]"]
 
         assigned = False
 
-        # ==================================================
-        # 1. PIE SEGMENTS (HÖCHSTE PRIORITÄT)
-        # ==================================================
+        # 1. PIE SEGMENTS
         dist = np.sqrt((x - CENTER_X)**2 + (y - CENTER_Y)**2)
 
         if dist <= RADIUS:
-
             angle = get_angle(x, y)
 
             for seg in PIE_SEGMENTS:
@@ -145,13 +136,11 @@ def map_aois(fix):
         if assigned:
             continue
 
-        # ==================================================
-        # 2. UI AOIs (OHNE BACKGROUND!)
-        # ==================================================
+        # 2. UI AOIs ohne background
         for aoi in get_ui_aois():
 
             if aoi["name"] == "background":
-                continue  # ❗ ganz wichtig
+                continue
 
             if aoi["x1"] <= x <= aoi["x2"] and aoi["y1"] <= y <= aoi["y2"]:
                 names.append(aoi["name"])
@@ -162,9 +151,7 @@ def map_aois(fix):
         if assigned:
             continue
 
-        # ==================================================
-        # 3. BACKGROUND (FALLBACK)
-        # ==================================================
+        # 3. BACKGROUND
         names.append("background")
         types.append("irrelevant")
 
@@ -172,29 +159,30 @@ def map_aois(fix):
     fix["AOI_type"] = types
 
     return fix
+
 # ============================================================
 # METRICS
 # ============================================================
 
 def compute_metrics(fix, duration):
 
-    dwell = fix.groupby("AOI")["Gaze event duration"].sum()
+    dwell = fix.groupby("AOI")["Gaze event duration [ms]"].sum()
     total_dwell = dwell.sum()
 
     def ttff(target):
         subset = fix[fix["AOI"] == target]
         if len(subset) == 0:
             return np.nan
-        return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]) / 1000
+        return (subset["Recording timestamp [ms]"].iloc[0] - fix["Recording timestamp [ms]"].iloc[0]) / 1000
 
     seq = fix["AOI"].tolist()
-    seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i-1]]
+    seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i - 1]]
 
     transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
     trans_df = pd.DataFrame(transitions, columns=["from", "to"])
     matrix = pd.crosstab(trans_df["from"], trans_df["to"])
 
-    irrelevant = fix[fix["AOI_type"] == "irrelevant"]["Gaze event duration"].sum()
+    irrelevant = fix[fix["AOI_type"] == "irrelevant"]["Gaze event duration [ms]"].sum()
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
 
     return {
@@ -207,7 +195,7 @@ def compute_metrics(fix, duration):
     }
 
 # ============================================================
-# OVERLAY (VISUAL DEBUG)
+# OVERLAY
 # ============================================================
 
 def plot_aoi_overlay():
@@ -219,11 +207,10 @@ def plot_aoi_overlay():
     plt.figure(figsize=(6, 9))
     plt.imshow(img)
 
-    # 🔥 PIE SEGMENTS + LABELS
     for seg in PIE_SEGMENTS:
 
         start = (seg["start"] - 90) % 360
-        end   = (seg["end"] - 90) % 360
+        end = (seg["end"] - 90) % 360
 
         wedge = Wedge(
             (CENTER_X * w, CENTER_Y * h),
@@ -232,29 +219,19 @@ def plot_aoi_overlay():
             end,
             facecolor="none",
             edgecolor="#1f4aff",
-            linewidth=1,            # 🔥 dünner (vorher 2)
-            linestyle=(0, (4, 4))   # 🔥 feinere Striche
+            linewidth=1,
+            linestyle=(0, (4, 4))
         )
         plt.gca().add_patch(wedge)
 
-        # 🔥 Mittelpunkt des Segments
         mid = (seg["start"] + seg["end"]) / 2
-
-        # 👉 gleiche Rotation wie beim Wedge!
         mid_rot = (mid - 90) % 360
         rad = np.radians(mid_rot)
 
-        # Punkt am Rand des Kreises
-        x_edge = CENTER_X + RADIUS * np.cos(rad)
-        y_edge = CENTER_Y + RADIUS * np.sin(rad)
-
-        # 🔥 Label außerhalb platzieren
         label_r = RADIUS * 1.35
         x_text = CENTER_X + label_r * np.cos(rad)
         y_text = CENTER_Y + label_r * np.sin(rad)
 
-
-        # 🔥 Text
         plt.text(
             x_text * w,
             y_text * h,
@@ -265,7 +242,6 @@ def plot_aoi_overlay():
             color="#1f4aff"
         )
 
-    # 🔥 UI AOIs (Rechtecke)
     for aoi in get_ui_aois():
 
         rect = plt.Rectangle(
@@ -279,7 +255,6 @@ def plot_aoi_overlay():
         )
         plt.gca().add_patch(rect)
 
-        # Label für AOI
         plt.text(
             aoi["x1"] * w,
             aoi["y1"] * h - 10,
@@ -321,19 +296,15 @@ def run_analysis(participant):
         if fix is None:
             continue
 
-        # ==================================================
-        # 🔥 HIER IST DEIN DEBUG BLOCK
-        # ==================================================
         fix = map_aois(fix)
 
         print("\n==============================")
-        print("AOI Counts für", participant)
+        print("AOI Counts fuer", participant)
         print(fix["AOI"].value_counts())
 
         print("\nDwell Time pro AOI:")
-        print(fix.groupby("AOI")["Gaze event duration"].sum())
+        print(fix.groupby("AOI")["Gaze event duration [ms]"].sum())
         print("==============================\n")
-        # ==================================================
 
         metrics = compute_metrics(fix, duration)
 

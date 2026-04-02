@@ -5,7 +5,8 @@ import matplotlib
 import os
 import numpy as np
 
-# DAS IST FÜR PARTICIPANT 1 BIS 20
+
+# DAS IST FÜR PARTICIPANT 20-30
 
 # ----------------------------------------------------
 # Non-interactive backend
@@ -15,12 +16,12 @@ matplotlib.use("Agg")
 # ----------------------------------------------------
 # Configuration
 # ----------------------------------------------------
-PARTICIPANT = "Participant27"
+PARTICIPANT = ("Participant24")
 QUESTION_ID = 7
 
 DATA_FILE = os.path.join("..", "..", "data", "testA", f"{PARTICIPANT}.tsv")
 IMAGE_PATH = os.path.join("..", "..", "data", "testA", "stimuli", f"Question{QUESTION_ID}.png")
-OUTPUT_DIR = os.path.join("..", "..", "results", "testA", PARTICIPANT.lower(), "fixations_clean")
+OUTPUT_DIR = os.path.join("..", "..", "results", "testA", PARTICIPANT.lower(), "fixations")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -34,39 +35,39 @@ df = pd.read_csv(DATA_FILE, sep="\t", low_memory=False)
 # ----------------------------------------------------
 events = df[
     (df["Event"] == "URLStart") &
-    (df["Event value"].str.contains("Question", na=False))
-    ].sort_values("Recording timestamp")
+    (df["Event value"].astype(str).str.contains("Question", na=False))
+    ].sort_values("Recording timestamp [ms]")
 
 current_event = events[
-    events["Event value"].str.contains(f"Question {QUESTION_ID}", na=False)
+    events["Event value"].astype(str).str.contains(f"Question {QUESTION_ID}", na=False)
 ]
 
 if current_event.empty:
     print(f"⚠️ Question {QUESTION_ID} not found")
     exit()
 
-start_time = current_event["Recording timestamp"].iloc[0]
+start_time = current_event["Recording timestamp [ms]"].iloc[0]
 
-next_events = events[events["Recording timestamp"] > start_time]
+next_events = events[events["Recording timestamp [ms]"] > start_time]
 
 if not next_events.empty:
-    end_time = next_events["Recording timestamp"].iloc[0]
+    end_time = next_events["Recording timestamp [ms]"].iloc[0]
 else:
-    end_time = df["Recording timestamp"].max()
+    end_time = df["Recording timestamp [ms]"].max()
 
 # ----------------------------------------------------
 # Extract + CLEAN fixations
 # ----------------------------------------------------
 fix = df[
     (df["Eye movement type"] == "Fixation") &
-    (df["Recording timestamp"] >= start_time) &
-    (df["Recording timestamp"] < end_time)
+    (df["Recording timestamp [ms]"] >= start_time) &
+    (df["Recording timestamp [ms]"] < end_time)
     ].copy()
 
-# Duration filter (same as analysis!)
+# Duration filter
 fix = fix[
-    (fix["Gaze event duration"] >= 80) &
-    (fix["Gaze event duration"] <= 1000)
+    (fix["Gaze event duration [ms]"] >= 80) &
+    (fix["Gaze event duration [ms]"] <= 1000)
     ]
 
 # Remove duplicates
@@ -84,13 +85,13 @@ if fix.empty:
 img = Image.open(IMAGE_PATH)
 w, h = img.size
 
-fix["X_px"] = fix["Fixation point X (MCSnorm)"] * w
-fix["Y_px"] = fix["Fixation point Y (MCSnorm)"] * h
+fix["X_px"] = fix["Fixation point X [MCS norm]"] * w
+fix["Y_px"] = fix["Fixation point Y [MCS norm]"] * h
 
 # ----------------------------------------------------
 # Scale fixation size by duration
 # ----------------------------------------------------
-dur = fix["Gaze event duration"].to_numpy()
+dur = fix["Gaze event duration [ms]"].to_numpy()
 dur_scaled = np.clip(dur, 80, 600)
 size = dur_scaled / 6
 
@@ -109,13 +110,12 @@ ax.axis("off")
 ax.scatter(
     fix["X_px"],
     fix["Y_px"],
-    s=size * 1.5,           # etwas größer
-    color="#cc0000",        # kräftiges rot
-    edgecolors="black",     # schwarzer rand für kontrast
+    s=size * 1.5,
+    color="#cc0000",
+    edgecolors="black",
     linewidth=0.6,
-    alpha=0.9               # weniger transparent
+    alpha=0.9
 )
-
 
 plt.tight_layout()
 
@@ -131,3 +131,4 @@ plt.savefig(out_path, dpi=300, bbox_inches="tight")
 plt.close()
 
 print("✅ Clean fixation plot saved.")
+print("📁 Saved to:", out_path)

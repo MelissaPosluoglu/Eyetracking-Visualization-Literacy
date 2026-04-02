@@ -5,6 +5,9 @@ import matplotlib
 import os
 import numpy as np
 
+# DAS IST FÜR PARTICIPANT 20-30
+
+
 # ----------------------------------------------------
 # Non-interactive backend
 # ----------------------------------------------------
@@ -13,28 +16,19 @@ matplotlib.use("Agg")
 # ----------------------------------------------------
 # Configuration
 # ----------------------------------------------------
-PARTICIPANT = "Participant21"
-QUESTION_ID = 1
+PARTICIPANT = "Participant22"
+QUESTION_ID = 2
 
-DATA_FILE = os.path.join(
-    "..", "..", "data", "testA", f"{PARTICIPANT}.tsv"
-)
-
-IMAGE_PATH = os.path.join(
-    "..", "..", "data", "testA", "stimuli", f"Question{QUESTION_ID}.png"
-)
-
-OUTPUT_DIR = os.path.join(
-    "..", "..", "results", "testA",
-    PARTICIPANT.lower(), "saccades"
-)
+DATA_FILE = os.path.join("..", "..", "data", "testA", f"{PARTICIPANT}.tsv")
+IMAGE_PATH = os.path.join("..", "..", "data", "testA", "stimuli", f"Question{QUESTION_ID}.png")
+OUTPUT_DIR = os.path.join("..", "..", "results", "testA", PARTICIPANT.lower(), "saccades")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ----------------------------------------------------
 # Parameters
 # ----------------------------------------------------
-ANALYSIS_MIN_PX = 20      # Filter gegen Messrauschen
-VISUAL_MIN_PX   = 60      # Nur für Lesbarkeit
+ANALYSIS_MIN_PX = 20
+VISUAL_MIN_PX = 60
 ALPHA = 0.25
 LINEWIDTH = 1.0
 
@@ -48,31 +42,29 @@ df = pd.read_csv(DATA_FILE, sep="\t", low_memory=False)
 # ----------------------------------------------------
 url_events = df[
     (df["Event"].isin(["URLStart", "URLEnd"])) &
-    (df["Event value"].str.contains(
-        f"Question {QUESTION_ID}", na=False
-    ))
-    ]
+    (df["Event value"].astype(str).str.contains(f"Question {QUESTION_ID}", na=False))
+    ].copy()
 
 if url_events.empty:
     raise RuntimeError(f"No URL events found for Question {QUESTION_ID}")
 
-t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
-t_end   = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
+t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp [ms]"].min()
+t_end = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp [ms]"].max()
 
 # ----------------------------------------------------
 # Fixationen im Zeitfenster
 # ----------------------------------------------------
 fix = df[
     (df["Eye movement type"] == "Fixation") &
-    (df["Recording timestamp"].between(t_start, t_end))
+    (df["Recording timestamp [ms]"].between(t_start, t_end))
     ].copy()
 
 fix = fix[
-    (fix["Fixation point X (MCSnorm)"].between(0, 1)) &
-    (fix["Fixation point Y (MCSnorm)"].between(0, 1))
+    (fix["Fixation point X [MCS norm]"].between(0, 1)) &
+    (fix["Fixation point Y [MCS norm]"].between(0, 1))
     ]
 
-fix = fix.sort_values("Recording timestamp").reset_index(drop=True)
+fix = fix.sort_values("Recording timestamp [ms]").reset_index(drop=True)
 
 if len(fix) < 2:
     raise RuntimeError("Not enough fixations to compute saccades")
@@ -83,8 +75,8 @@ if len(fix) < 2:
 img = Image.open(IMAGE_PATH)
 w, h = img.size
 
-fix["X_px"] = fix["Fixation point X (MCSnorm)"] * w
-fix["Y_px"] = fix["Fixation point Y (MCSnorm)"] * h
+fix["X_px"] = fix["Fixation point X [MCS norm]"] * w
+fix["Y_px"] = fix["Fixation point Y [MCS norm]"] * h
 
 # ----------------------------------------------------
 # Sakkaden berechnen
@@ -97,7 +89,6 @@ for i in range(len(fix) - 1):
 
     dist = np.hypot(x2 - x1, y2 - y1)
 
-    # Analysefilter (Rauschen entfernen)
     if dist >= ANALYSIS_MIN_PX:
         saccades.append((x1, y1, x2, y2, dist))
 
@@ -105,7 +96,7 @@ if len(saccades) == 0:
     raise RuntimeError("No valid saccades after filtering.")
 
 # ----------------------------------------------------
-# Analysekennwerte (wissenschaftlich korrekt)
+# Analysekennwerte
 # ----------------------------------------------------
 lengths = [s[4] for s in saccades]
 
@@ -120,11 +111,9 @@ print("----------------------------")
 # Visualisierung
 # ----------------------------------------------------
 plt.figure(figsize=(5.5, 9))
-plt.imshow(img)   # kein invert_yaxis mehr!
+plt.imshow(img)
 
 for x1, y1, x2, y2, dist in saccades:
-
-    # zusätzlicher Visualisierungsfilter
     if dist < VISUAL_MIN_PX:
         continue
 
@@ -157,3 +146,4 @@ plt.savefig(out_path, dpi=300)
 plt.close()
 
 print("✅ Clean, filtered saccade visualization saved.")
+print("📁 Saved to:", out_path)
