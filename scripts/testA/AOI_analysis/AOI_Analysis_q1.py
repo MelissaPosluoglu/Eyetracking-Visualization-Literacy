@@ -16,7 +16,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "results", "testA")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-PARTICIPANTS = ["Participant4"]
+PARTICIPANTS = ["Participant20"]
 
 # ============================================================
 # AOIs (Q1 FINAL)
@@ -55,8 +55,8 @@ def get_fixations_for_question(df, question_label):
     if len(url_events) < 2:
         return None, None
 
-    t_start = url_events[df["Event"] == "URLStart"]["Recording timestamp"].min()
-    t_end   = url_events[df["Event"] == "URLEnd"]["Recording timestamp"].max()
+    t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
+    t_end   = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
 
     duration = (t_end - t_start) / 1000
 
@@ -145,7 +145,7 @@ def compute_metrics(fix, duration):
         "Transitions": len(seq_clean),
         "Transitions_per_sec": transitions_per_sec,
         "Sequence_length": len(seq_clean),
-        "First_AOI": seq_clean[0] if len(seq_clean) > 0 else None,
+        "First_AOI": next((a for a in seq_clean if a != "background"), None),
 
         "Irrelevant_Ratio": irrelevant_ratio,
 
@@ -235,6 +235,19 @@ def run_analysis(participant):
 
         aois = get_aois_q1()
         fix = map_aois(fix, aois)
+
+        # ============================================================
+        # 🔥 DEBUG OUTPUT (NEU)
+        # ============================================================
+        print("\n==============================")
+        print(f"AOI Counts für {participant}")
+        print(fix["AOI"].value_counts())
+
+        print("\nDwell Time pro AOI:")
+        print(fix.groupby("AOI")["Gaze event duration"].sum())
+        print("==============================\n")
+
+        # ============================================================
 
         metrics = compute_metrics(fix, duration)
 
