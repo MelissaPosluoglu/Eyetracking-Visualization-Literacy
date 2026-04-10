@@ -73,22 +73,22 @@ def get_fixations_for_question(df, question_label):
     if len(url_events) < 2:
         return None, None
 
-    t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
-    t_end = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
+    t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp [ms]"].min()
+    t_end = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp [ms]"].max()
 
     duration = (t_end - t_start) / 1000
 
     fix = df[
         (df["Eye movement type"] == "Fixation") &
-        (df["Recording timestamp"].between(t_start, t_end))
+        (df["Recording timestamp [ms]"].between(t_start, t_end))
         ].copy()
 
     fix = fix[
-        (fix["Fixation point X (MCSnorm)"].between(0, 1)) &
-        (fix["Fixation point Y (MCSnorm)"].between(0, 1))
+        (fix["Fixation point X [MCS norm]"].between(0, 1)) &
+        (fix["Fixation point Y [MCS norm]"].between(0, 1))
         ]
 
-    return fix.sort_values("Recording timestamp").reset_index(drop=True), duration
+    return fix.sort_values("Recording timestamp [ms]").reset_index(drop=True), duration
 
 # ============================================================
 # ANGLE FUNCTION
@@ -115,8 +115,8 @@ def map_aois(fix):
 
     for _, row in fix.iterrows():
 
-        x = row["Fixation point X (MCSnorm)"]
-        y = row["Fixation point Y (MCSnorm)"]
+        x = row["Fixation point X [MCS norm]"]
+        y = row["Fixation point Y [MCS norm]"]
 
         assigned = False
 
@@ -166,14 +166,14 @@ def map_aois(fix):
 
 def compute_metrics(fix, duration):
 
-    dwell = fix.groupby("AOI")["Gaze event duration"].sum()
+    dwell = fix.groupby("AOI")["Gaze event duration [ms]"].sum()
     total_dwell = dwell.sum()
 
     def ttff(target):
         subset = fix[fix["AOI"] == target]
         if len(subset) == 0:
             return np.nan
-        return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]) / 1000
+        return (subset["Recording timestamp [ms]"].iloc[0] - fix["Recording timestamp [ms]"].iloc[0]) / 1000
 
     seq = fix["AOI"].tolist()
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i - 1]]
@@ -182,7 +182,7 @@ def compute_metrics(fix, duration):
     trans_df = pd.DataFrame(transitions, columns=["from", "to"])
     matrix = pd.crosstab(trans_df["from"], trans_df["to"])
 
-    irrelevant = fix[fix["AOI_type"] == "irrelevant"]["Gaze event duration"].sum()
+    irrelevant = fix[fix["AOI_type"] == "irrelevant"]["Gaze event duration [ms]"].sum()
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
 
     return {
@@ -303,7 +303,7 @@ def run_analysis(participant):
         print(fix["AOI"].value_counts())
 
         print("\nDwell Time pro AOI:")
-        print(fix.groupby("AOI")["Gaze event duration"].sum())
+        print(fix.groupby("AOI")["Gaze event duration [ms]"].sum())
         print("==============================\n")
 
         metrics = compute_metrics(fix, duration)
