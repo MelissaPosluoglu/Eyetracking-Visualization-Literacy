@@ -16,7 +16,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "results", "testA")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-PARTICIPANTS = ["Participant20"]
+PARTICIPANTS = ["Participant12"]
 
 # ============================================================
 # AOIs (UNVERÄNDERT)
@@ -141,6 +141,7 @@ def map_aois(fix, aois):
 def compute_metrics(fix, duration):
 
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
+    total_dwell = dwell.sum()
 
     def ttff(target):
         subset = fix[fix["AOI"] == target]
@@ -148,10 +149,33 @@ def compute_metrics(fix, duration):
             return np.nan
         return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]) / 1000
 
+    seq = fix["AOI"].tolist()
+    seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i - 1]]
+
+    transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
+    trans_df = pd.DataFrame(transitions, columns=["from", "to"])
+    matrix = pd.crosstab(trans_df["from"], trans_df["to"])
+
+    transitions_per_sec = len(seq_clean) / duration if duration > 0 else 0
+
+    irrelevant = fix[fix["AOI_type"] == "irrelevant"]["Gaze event duration"].sum()
+    irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
+
     return {
         "TTFF_2012": ttff("year_2012"),
         "TTFF_answers": ttff("answers"),
+
         "Dwell_2012": dwell.get("year_2012", 0),
+        "Dwell_answers": dwell.get("answers", 0),
+
+        "Transitions": len(seq_clean),
+        "Transitions_per_sec": transitions_per_sec,
+        "Sequence_length": len(seq_clean),
+        "First_AOI": next((a for a in seq_clean if a != "background"), None),
+
+        "Irrelevant_Ratio": irrelevant_ratio,
+
+        "Transition_Matrix": matrix
     }
 
 # ============================================================
@@ -271,10 +295,12 @@ def run_analysis(participant):
     question_labels = df[df["Event"] == "URLStart"]["Event value"].dropna().unique()
 
     results = []
+    matrices = []
 
     for q_label in question_labels:
 
         qid = extract_question_id(q_label)
+
         if qid != 11:
             continue
 
@@ -285,16 +311,28 @@ def run_analysis(participant):
         aois = get_aois_q11()
         fix = map_aois(fix, aois)
 
-        print("\n=== AOI Counts ===")
+        # 🔥 IDENTISCHE CONSOLE AUSGABE WIE Q5
+        print("\n==============================")
+        print("AOI Counts fuer", participant)
         print(fix["AOI"].value_counts())
 
+        print("\nDwell Time pro AOI:")
+        print(fix.groupby("AOI")["Gaze event duration"].sum())
+        print("==============================\n")
+
         metrics = compute_metrics(fix, duration)
+
+        # 🔥 Transition Matrix speichern
+        matrix = metrics.pop("Transition_Matrix")
+        matrix["Participant"] = participant
+        matrix["Question"] = qid
+        matrices.append(matrix)
 
         row = {"Participant": participant, "Question": qid}
         row.update(metrics)
         results.append(row)
 
-    return pd.DataFrame(results)
+    return pd.DataFrame(results), pd.concat(matrices) if len(matrices) > 0 else None
 
 # ============================================================
 # RUN
@@ -305,11 +343,27 @@ if __name__ == "__main__":
     plot_aoi_overlay()
 
     all_results = []
+    all_matrices = []
 
     for p in PARTICIPANTS:
-        df_res = run_analysis(p)
-        all_results.append(df_res)
+        df_res, df_mat = run_analysis(p)
 
-    pd.concat(all_results).to_csv(os.path.join(OUTPUT_DIR, "aoi_metrics_q11.csv"), index=False)
+        if df_res is not None and not df_res.empty:
+            all_results.append(df_res)
 
-    print("\n✔ Q11 FINAL (Q8 STYLE DESIGN) fertig!")
+        if df_mat is not None and not df_mat.empty:
+            all_matrices.append(df_mat)
+
+    if len(all_results) > 0:
+        pd.concat(all_results).to_csv(
+            os.path.join(OUTPUT_DIR, "aoi_metrics_q11.csv"),
+            index=False
+        )
+
+    if len(all_matrices) > 0:
+        pd.concat(all_matrices).to_csv(
+            os.path.join(OUTPUT_DIR, "transition_matrix_q11.csv"),
+            index=False
+        )
+
+    print("\n✔ FINAL: Q11 AOI Analyse komplett & korrekt")
