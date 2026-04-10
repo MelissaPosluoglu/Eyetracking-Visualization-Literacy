@@ -1,2 +1,0 @@
-Question_ID,Duration_sec_A,Saccades_per_min_A,Scanpath_per_min_norm_A,Vertical_Ratio_A,Regression_Rate_A,Directional_Entropy_A,Duration_sec_B,Saccades_per_min_B,Scanpath_per_min_norm_B,Vertical_Ratio_B,Regression_Rate_B,Directional_Entropy_B,Strategy_Diff_Score
-1.0,13.973,244.7577,25.0648,0.6626,0.4737,2.6645,21.226,262.8851,41.9693,0.6822,0.5484,2.9292,4.3278
