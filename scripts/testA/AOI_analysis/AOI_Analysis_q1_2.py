@@ -16,7 +16,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "results", "testA")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-PARTICIPANTS = ["Participant22"]
+PARTICIPANTS = ["Participant27"]
 
 # ============================================================
 # AOIs (Q1 FINAL)

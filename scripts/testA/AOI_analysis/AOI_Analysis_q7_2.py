@@ -15,7 +15,7 @@ DATA_PATH = os.path.join(BASE_DIR, "data", "testA")
 STIM_PATH = os.path.join(DATA_PATH, "stimuli")
 RESULTS_BASE = os.path.join(BASE_DIR, "results", "testA")
 
-PARTICIPANTS = ["Participant20"]
+PARTICIPANTS = ["Participant21"]
 
 def get_output_dir(participant):
     participant_dir = os.path.join(RESULTS_BASE, participant.lower())
