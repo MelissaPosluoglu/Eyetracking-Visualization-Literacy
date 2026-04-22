@@ -1,2 +1,2 @@
-Participant,Question,TTFF_samsung,TTFF_answers,Dwell_samsung,Transitions,Irrelevant_Ratio
-Participant21,5,3.728,4.245,56164.0,14,0.023471320588519643
+Participant,Question,TTFF_samsung,TTFF_answers,Dwell_samsung,Dwell_answers,Dwell_ratio_samsung,Dwell_ratio_answers,Transitions,Transitions_per_sec,Sequence_length,First_AOI,Irrelevant_Ratio
+Participant21,5,3728,4245,1172.64323234638,7521.189711290224,0.10055249805748415,0.6449313763754265,14,1.2004801920768307,14,question,0.02347132058851964

@@ -1,2 +1,2 @@
 Participant,Question,TTFF_feb,TTFF_answers,Dwell_feb,Dwell_answers,Dwell_ratio_feb,Transitions,Transitions_per_sec,Sequence_length,First_AOI,Irrelevant_Ratio
-Participant18,8,0.0,0.602,23868.0,175259.0,0.055839154785912476,14,1.2815818381545223,14,month_feb,0.08305922206989487
+Participant18,8,0,602,609.9869268813079,4479.038830999293,0.055839154785912476,13,1.190040278286342,14,month_feb,0.08305922206989486

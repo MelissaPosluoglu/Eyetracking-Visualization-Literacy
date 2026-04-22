@@ -16,41 +16,23 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "results", "testA")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-PARTICIPANTS = ["Participant13"]
+PARTICIPANTS = ["Participant22"]
 
 # ============================================================
-# AOIs (UNVERÄNDERT)
+# AOIs
 # ============================================================
 
 def get_aois_q11():
     return [
+        {"name": "question", "x1": 0.30, "y1": 0.03, "x2": 0.70, "y2": 0.16, "type": "relevant"},
 
-        {"name": "question", "x1": 0.30, "y1": 0.06, "x2": 0.70, "y2": 0.16, "type": "relevant"},
+        {"name": "year_2012", "x1": 0.515, "x2": 0.545, "y1": 0.24, "y2": 0.60, "type": "relevant"},
+        {"name": "Rest",      "x1": 0.415, "x2": 0.515, "y1": 0.22, "y2": 0.60, "type": "relevant"},
+        {"name": "Rest1",     "x1": 0.545, "x2": 0.602, "y1": 0.22, "y2": 0.60, "type": "relevant"},
 
-        {"name": "year_2012",
-         "x1": 0.515, "x2": 0.545,
-         "y1": 0.24, "y2": 0.60,
-         "type": "relevant"},
+        {"name": "answers", "x1": 0.28, "y1": 0.67, "x2": 0.72, "y2": 0.95, "type": "relevant"},
 
-        {"name": "Rest",
-         "x1": 0.415, "x2": 0.515,
-         "y1": 0.22, "y2": 0.60,
-         "type": "relevant"},
-
-        {"name": "Rest1",
-         "x1": 0.545, "x2": 0.602,
-         "y1": 0.22, "y2": 0.60,
-         "type": "relevant"},
-
-        {"name": "answers",
-         "x1": 0.28, "y1": 0.67,
-         "x2": 0.72, "y2": 0.95,
-         "type": "relevant"},
-
-        {"name": "background",
-         "x1": 0.0, "y1": 0.0,
-         "x2": 1.0, "y2": 1.0,
-         "type": "irrelevant"},
+        {"name": "background", "x1": 0.0, "y1": 0.0, "x2": 1.0, "y2": 1.0, "type": "irrelevant"},
     ]
 
 # ============================================================
@@ -67,25 +49,29 @@ def get_fixations_for_question(df, question_label):
     url_events = df[
         (df["Event"].isin(["URLStart", "URLEnd"])) &
         (df["Event value"] == question_label)
-    ]
+        ]
 
-    if len(url_events) < 2:
+    if len(url_events) < 1:
         return None, None
 
     t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
-    t_end   = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
+    t_end = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
 
-    duration = (t_end - t_start) / 1000
+    # 🔥 FIX: fallback bei kaputten Logs
+    if pd.isna(t_end) or (t_end - t_start) > 30000:
+        t_end = t_start + 25000
+
+    duration = (t_end - t_start)  # 🔥 ms (KEIN /1000!)
 
     fix = df[
         (df["Eye movement type"] == "Fixation") &
         (df["Recording timestamp"].between(t_start, t_end))
-    ].copy()
+        ].copy()
 
     fix = fix[
         (fix["Fixation point X (MCSnorm)"].between(0, 1)) &
         (fix["Fixation point Y (MCSnorm)"].between(0, 1))
-    ]
+        ]
 
     return fix.sort_values("Recording timestamp").reset_index(drop=True), duration
 
@@ -95,22 +81,12 @@ def get_fixations_for_question(df, question_label):
 
 def map_aois(fix, aois):
 
-    priority = [
-        "year_2012",
-        "Rest",
-        "Rest1",
-        "answers",
-        "question",
-        "background"
-    ]
-
     aois_sorted = sorted(
         aois,
-        key=lambda a: priority.index(a["name"]) if a["name"] in priority else 999
+        key=lambda a: (a["name"] == "background", (a["x2"]-a["x1"]) * (a["y2"]-a["y1"]))
     )
 
-    aoi_names = []
-    aoi_types = []
+    names, types = [], []
 
     for _, row in fix.iterrows():
         x = row["Fixation point X (MCSnorm)"]
@@ -120,17 +96,17 @@ def map_aois(fix, aois):
 
         for aoi in aois_sorted:
             if aoi["x1"] <= x <= aoi["x2"] and aoi["y1"] <= y <= aoi["y2"]:
-                aoi_names.append(aoi["name"])
-                aoi_types.append(aoi["type"])
+                names.append(aoi["name"])
+                types.append(aoi["type"])
                 assigned = True
                 break
 
         if not assigned:
-            aoi_names.append("background")
-            aoi_types.append("irrelevant")
+            names.append("background")
+            types.append("irrelevant")
 
-    fix["AOI"] = aoi_names
-    fix["AOI_type"] = aoi_types
+    fix["AOI"] = names
+    fix["AOI_type"] = types
 
     return fix
 
@@ -139,28 +115,80 @@ def map_aois(fix, aois):
 # ============================================================
 
 def compute_metrics(fix, duration):
+    """
+    FINAL stable version
+    duration in milliseconds
+    """
 
+    # =========================================================
+    # DWELL TIME
+    # =========================================================
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
     total_dwell = dwell.sum()
 
+    # 🔥 IMPORTANT: compute irrelevant BEFORE scaling
+    irrelevant = fix[fix["AOI_type"] == "irrelevant"]["Gaze event duration"].sum()
+
+    # 🔥 FIX: normalize EVERYTHING consistently
+    if total_dwell > duration and duration > 0:
+        scale = duration / total_dwell
+
+        dwell = dwell * scale
+        irrelevant = irrelevant * scale   # ✅ FIXED !!!
+
+        total_dwell = dwell.sum()
+
+    # =========================================================
+    # DWELL RATIOS
+    # =========================================================
+    dwell_ratio = {
+        k: (v / total_dwell if total_dwell > 0 else 0)
+        for k, v in dwell.items()
+    }
+
+    # =========================================================
+    # TTFF
+    # =========================================================
     def ttff(target):
         subset = fix[fix["AOI"] == target]
-        if len(subset) == 0:
+        if subset.empty:
             return np.nan
         return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]) / 1000
 
+    # =========================================================
+    # SEQUENCE + TRANSITIONS
+    # =========================================================
     seq = fix["AOI"].tolist()
-    seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i - 1]]
 
-    transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
-    trans_df = pd.DataFrame(transitions, columns=["from", "to"])
-    matrix = pd.crosstab(trans_df["from"], trans_df["to"])
+    seq_clean = [
+        seq[i] for i in range(len(seq))
+        if i == 0 or seq[i] != seq[i - 1]
+    ]
 
-    transitions_per_sec = len(seq_clean) / duration if duration > 0 else 0
+    if len(seq_clean) >= 2:
+        transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
+        trans_df = pd.DataFrame(transitions, columns=["from", "to"])
+        matrix = pd.crosstab(trans_df["from"], trans_df["to"])
+    else:
+        matrix = pd.DataFrame()
 
-    irrelevant = fix[fix["AOI_type"] == "irrelevant"]["Gaze event duration"].sum()
-    irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
+    transitions_count = max(len(seq_clean) - 1, 0)
 
+    transitions_per_sec = (
+        transitions_count / (duration / 1000)
+        if duration > 0 else 0
+    )
+
+    # =========================================================
+    # IRRELEVANT RATIO (NOW CORRECT)
+    # =========================================================
+    irrelevant_ratio = (
+        irrelevant / total_dwell if total_dwell > 0 else 0
+    )
+
+    # =========================================================
+    # OUTPUT
+    # =========================================================
     return {
         "TTFF_2012": ttff("year_2012"),
         "TTFF_answers": ttff("answers"),
@@ -168,9 +196,13 @@ def compute_metrics(fix, duration):
         "Dwell_2012": dwell.get("year_2012", 0),
         "Dwell_answers": dwell.get("answers", 0),
 
-        "Transitions": len(seq_clean),
+        "Dwell_ratio_2012": dwell_ratio.get("year_2012", 0),
+        "Dwell_ratio_answers": dwell_ratio.get("answers", 0),
+
+        "Transitions": transitions_count,
         "Transitions_per_sec": transitions_per_sec,
         "Sequence_length": len(seq_clean),
+
         "First_AOI": next((a for a in seq_clean if a != "background"), None),
 
         "Irrelevant_Ratio": irrelevant_ratio,
@@ -179,7 +211,7 @@ def compute_metrics(fix, duration):
     }
 
 # ============================================================
-# AOI OVERLAY (Q8 STYLE 🔥)
+# OVERLAY (UNVERÄNDERT)
 # ============================================================
 
 def plot_aoi_overlay():
@@ -200,80 +232,20 @@ def plot_aoi_overlay():
 
     for aoi in aois:
 
-        # 🎯 Farben
-        if aoi["name"] == "year_2012":
-            color = "#ff2d2d"
-            lw = 1.2
-        else:
-            color = "#1f4aff" if aoi["type"] == "relevant" else "#999999"
-            lw = 0.9
+        color = "#ff2d2d" if aoi["name"] == "year_2012" else ("#1f4aff" if aoi["type"] == "relevant" else "#999999")
 
         x1 = aoi["x1"] * w
         y1 = aoi["y1"] * h
         width = (aoi["x2"] - aoi["x1"]) * w
         height = (aoi["y2"] - aoi["y1"]) * h
 
-        rect = plt.Rectangle(
-            (x1, y1),
-            width,
-            height,
-            linewidth=lw,
-            edgecolor=color,
-            facecolor="none",
-            linestyle=(0, (3, 3))
-        )
+        rect = plt.Rectangle((x1, y1), width, height,
+                             linewidth=1,
+                             edgecolor=color,
+                             facecolor="none",
+                             linestyle=(0, (3, 3)))
 
         plt.gca().add_patch(rect)
-
-        # =========================
-        # 🔥 SAUBERE LABEL POSITIONEN
-        # =========================
-
-        center_y = y1 + height / 2
-
-        if aoi["name"] == "year_2012":
-            text_x = x1 + width + 20
-            text_y = center_y
-
-        elif aoi["name"] in ["Rest", "Rest1"]:
-            text_x = x1 + width + 15
-            text_y = center_y -40
-
-        elif aoi["name"] == "question":
-            text_x = x1 + width + 30
-            text_y = y1 + 10
-
-        elif aoi["name"] == "answers":
-            text_x = x1 + width + 30
-            text_y = center_y
-
-        elif aoi["name"] == "background":
-            # ❗ KEINE LINIE + kein Chaos
-            plt.text(10, 20, "background", fontsize=6, color="gray")
-            continue
-
-        else:
-            text_x = x1 + width + 10
-            text_y = center_y
-
-        # 🔥 Linie NUR für relevante AOIs (kein background!)
-        if aoi["name"] != "background":
-            plt.plot(
-                [x1 + width, text_x],
-                [center_y, text_y],
-                color=color,
-                linewidth=0.6
-            )
-
-        plt.text(
-            text_x,
-            text_y,
-            aoi["name"],
-            color=color,
-            fontsize=6,
-            ha="left",
-            va="center"
-        )
 
     plt.axis("off")
 
@@ -294,13 +266,11 @@ def run_analysis(participant):
 
     question_labels = df[df["Event"] == "URLStart"]["Event value"].dropna().unique()
 
-    results = []
-    matrices = []
+    results, matrices = [], []
 
     for q_label in question_labels:
 
         qid = extract_question_id(q_label)
-
         if qid != 11:
             continue
 
@@ -308,10 +278,8 @@ def run_analysis(participant):
         if fix is None:
             continue
 
-        aois = get_aois_q11()
-        fix = map_aois(fix, aois)
+        fix = map_aois(fix, get_aois_q11())
 
-        # 🔥 IDENTISCHE CONSOLE AUSGABE WIE Q5
         print("\n==============================")
         print("AOI Counts fuer", participant)
         print(fix["AOI"].value_counts())
@@ -322,17 +290,17 @@ def run_analysis(participant):
 
         metrics = compute_metrics(fix, duration)
 
-        # 🔥 Transition Matrix speichern
         matrix = metrics.pop("Transition_Matrix")
-        matrix["Participant"] = participant
-        matrix["Question"] = qid
-        matrices.append(matrix)
+        if not matrix.empty:
+            matrix["Participant"] = participant
+            matrix["Question"] = qid
+            matrices.append(matrix)
 
         row = {"Participant": participant, "Question": qid}
         row.update(metrics)
         results.append(row)
 
-    return pd.DataFrame(results), pd.concat(matrices) if len(matrices) > 0 else None
+    return pd.DataFrame(results), pd.concat(matrices) if matrices else pd.DataFrame()
 
 # ============================================================
 # RUN
@@ -342,28 +310,21 @@ if __name__ == "__main__":
 
     plot_aoi_overlay()
 
-    all_results = []
-    all_matrices = []
+    all_results, all_matrices = [], []
 
     for p in PARTICIPANTS:
         df_res, df_mat = run_analysis(p)
 
-        if df_res is not None and not df_res.empty:
+        if not df_res.empty:
             all_results.append(df_res)
 
-        if df_mat is not None and not df_mat.empty:
+        if not df_mat.empty:
             all_matrices.append(df_mat)
 
-    if len(all_results) > 0:
-        pd.concat(all_results).to_csv(
-            os.path.join(OUTPUT_DIR, "aoi_metrics_q11.csv"),
-            index=False
-        )
+    if all_results:
+        pd.concat(all_results).to_csv(os.path.join(OUTPUT_DIR, "aoi_metrics_q11.csv"), index=False)
 
-    if len(all_matrices) > 0:
-        pd.concat(all_matrices).to_csv(
-            os.path.join(OUTPUT_DIR, "transition_matrix_q11.csv"),
-            index=False
-        )
+    if all_matrices:
+        pd.concat(all_matrices).to_csv(os.path.join(OUTPUT_DIR, "transition_matrix_q11.csv"), index=False)
 
-    print("\n✔ FINAL: Q11 AOI Analyse komplett & korrekt")
+    print("\n✔ FINAL: Q11 stabil & korrekt")

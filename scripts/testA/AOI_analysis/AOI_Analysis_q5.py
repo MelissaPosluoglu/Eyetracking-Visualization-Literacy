@@ -17,10 +17,10 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "results", "testA")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-PARTICIPANTS = ["Participant27"]
+PARTICIPANTS = ["Participant10"]
 
 # ============================================================
-# FINAL PIE SETTINGS
+# PIE SETTINGS
 # ============================================================
 
 CENTER_X = 0.5
@@ -50,9 +50,9 @@ add_segment("vivo", 33)
 
 def get_ui_aois():
     return [
-        {"name": "question",   "x1": 0.26, "y1": 0.03, "x2": 0.74, "y2": 0.20, "type": "relevant"},
-        {"name": "answers",    "x1": 0.28, "y1": 0.67, "x2": 0.72, "y2": 0.95, "type": "relevant"},
-        {"name": "background", "x1": 0.0,  "y1": 0.0,  "x2": 1.0,  "y2": 1.0,  "type": "irrelevant"},
+        {"name": "question", "x1": 0.26, "y1": 0.03, "x2": 0.74, "y2": 0.20, "type": "relevant"},
+        {"name": "answers",  "x1": 0.28, "y1": 0.67, "x2": 0.72, "y2": 0.95, "type": "relevant"},
+        {"name": "background","x1": 0.0, "y1": 0.0, "x2": 1.0, "y2": 1.0, "type": "irrelevant"},
     ]
 
 # ============================================================
@@ -62,6 +62,7 @@ def get_ui_aois():
 def extract_question_id(event_value):
     m = re.search(r"Question\s+(\d+)", str(event_value))
     return int(m.group(1)) if m else None
+
 
 def get_fixations_for_question(df, question_label):
 
@@ -74,13 +75,17 @@ def get_fixations_for_question(df, question_label):
         return None, None
 
     t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
-    t_end = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
+    t_end_real = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
 
-    duration = (t_end - t_start) / 1000
+    # 🔥 stabiler fallback
+    if pd.isna(t_end_real) or (t_end_real - t_start) > 30000:
+        t_end_real = t_start + 25000
+
+    duration = (t_end_real - t_start)
 
     fix = df[
         (df["Eye movement type"] == "Fixation") &
-        (df["Recording timestamp"].between(t_start, t_end))
+        (df["Recording timestamp"].between(t_start, t_end_real))
         ].copy()
 
     fix = fix[
@@ -91,7 +96,7 @@ def get_fixations_for_question(df, question_label):
     return fix.sort_values("Recording timestamp").reset_index(drop=True), duration
 
 # ============================================================
-# ANGLE FUNCTION
+# ANGLE
 # ============================================================
 
 def get_angle(x, y):
@@ -102,8 +107,7 @@ def get_angle(x, y):
     if angle < 0:
         angle += 360
 
-    angle = (360 - angle + 90) % 360
-    return angle
+    return (360 - angle + 90) % 360
 
 # ============================================================
 # AOI MAPPING
@@ -120,7 +124,7 @@ def map_aois(fix):
 
         assigned = False
 
-        # 1. PIE SEGMENTS
+        # PIE
         dist = np.sqrt((x - CENTER_X)**2 + (y - CENTER_Y)**2)
 
         if dist <= RADIUS:
@@ -136,9 +140,8 @@ def map_aois(fix):
         if assigned:
             continue
 
-        # 2. UI AOIs ohne background
+        # UI AOIs
         for aoi in get_ui_aois():
-
             if aoi["name"] == "background":
                 continue
 
@@ -151,7 +154,7 @@ def map_aois(fix):
         if assigned:
             continue
 
-        # 3. BACKGROUND
+        # fallback
         names.append("background")
         types.append("irrelevant")
 
@@ -161,7 +164,7 @@ def map_aois(fix):
     return fix
 
 # ============================================================
-# METRICS
+# METRICS (JETZT Q1-KOMPATIBEL)
 # ============================================================
 
 def compute_metrics(fix, duration):
@@ -169,33 +172,55 @@ def compute_metrics(fix, duration):
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
     total_dwell = dwell.sum()
 
+    # 🔥 FIX Ratio
+    if total_dwell > duration:
+        scale = duration / total_dwell
+        dwell = dwell * scale
+        total_dwell = dwell.sum()
+
+    dwell_ratio = {k: v / total_dwell for k, v in dwell.items()} if total_dwell > 0 else {}
+
     def ttff(target):
         subset = fix[fix["AOI"] == target]
         if len(subset) == 0:
             return np.nan
-        return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]) / 1000
+        return subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]
 
     seq = fix["AOI"].tolist()
-    seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i - 1]]
+    seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i-1]]
 
     transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
     trans_df = pd.DataFrame(transitions, columns=["from", "to"])
     matrix = pd.crosstab(trans_df["from"], trans_df["to"])
 
-    irrelevant = fix[fix["AOI_type"] == "irrelevant"]["Gaze event duration"].sum()
+    transitions_per_sec = len(seq_clean) / (duration / 1000) if duration > 0 else 0
+
+    irrelevant = dwell.get("background", 0)
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
 
     return {
         "TTFF_samsung": ttff("samsung"),
         "TTFF_answers": ttff("answers"),
+
         "Dwell_samsung": dwell.get("samsung", 0),
+        "Dwell_answers": dwell.get("answers", 0),
+
+        "Dwell_ratio_samsung": dwell_ratio.get("samsung", 0),
+        "Dwell_ratio_answers": dwell_ratio.get("answers", 0),
+
         "Transitions": len(seq_clean),
+        "Transitions_per_sec": transitions_per_sec,
+        "Sequence_length": len(seq_clean),
+
+        "First_AOI": next((a for a in seq_clean if a != "background"), None),
+
         "Irrelevant_Ratio": irrelevant_ratio,
+
         "Transition_Matrix": matrix
     }
 
 # ============================================================
-# OVERLAY
+# OVERLAY (UNVERÄNDERT)
 # ============================================================
 
 def plot_aoi_overlay():
@@ -208,7 +233,6 @@ def plot_aoi_overlay():
     plt.imshow(img)
 
     for seg in PIE_SEGMENTS:
-
         start = (seg["start"] - 90) % 360
         end = (seg["end"] - 90) % 360
 
@@ -224,26 +248,7 @@ def plot_aoi_overlay():
         )
         plt.gca().add_patch(wedge)
 
-        mid = (seg["start"] + seg["end"]) / 2
-        mid_rot = (mid - 90) % 360
-        rad = np.radians(mid_rot)
-
-        label_r = RADIUS * 1.35
-        x_text = CENTER_X + label_r * np.cos(rad)
-        y_text = CENTER_Y + label_r * np.sin(rad)
-
-        plt.text(
-            x_text * w,
-            y_text * h,
-            seg["name"],
-            ha="center",
-            va="center",
-            fontsize=6,
-            color="#1f4aff"
-        )
-
     for aoi in get_ui_aois():
-
         rect = plt.Rectangle(
             (aoi["x1"] * w, aoi["y1"] * h),
             (aoi["x2"] - aoi["x1"]) * w,
@@ -254,14 +259,6 @@ def plot_aoi_overlay():
             linestyle="--"
         )
         plt.gca().add_patch(rect)
-
-        plt.text(
-            aoi["x1"] * w,
-            aoi["y1"] * h - 10,
-            aoi["name"],
-            color="blue",
-            fontsize=8
-        )
 
     plt.axis("off")
 
@@ -288,7 +285,6 @@ def run_analysis(participant):
     for q_label in question_labels:
 
         qid = extract_question_id(q_label)
-
         if qid != 5:
             continue
 
