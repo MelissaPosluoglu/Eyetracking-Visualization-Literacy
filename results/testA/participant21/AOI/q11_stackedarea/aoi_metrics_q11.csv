@@ -1,2 +1,2 @@
-Participant,Question,TTFF_2012,TTFF_answers,Dwell_2012,Dwell_answers,Transitions,Transitions_per_sec,Sequence_length,First_AOI,Irrelevant_Ratio
-Participant21,11,5.587,8.895,7015.0,94062.0,34,1.3432364096080909,34,question,0.1964803388556288
+Participant,Question,TTFF_2012,TTFF_answers,Dwell_2012,Dwell_answers,Dwell_ratio_2012,Dwell_ratio_answers,Transitions,Transitions_per_sec,Sequence_length,First_AOI,Irrelevant_Ratio
+Participant21,11,5.587,8.895,162.79343192174048,2182.8475828115115,0.00643147250006876,0.08623765734874807,33,1.3037294563843236,34,question,0.19648033885562877
