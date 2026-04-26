@@ -21,20 +21,15 @@ def load_file(name, sep=","):
     return df
 
 # ============================================================
-# 🔥 NORMALIZE (WICHTIG!)
+# NORMALIZE PARTICIPANTS
 # ============================================================
 
 def normalize(p):
-    p = str(p).strip()
-    p = p.replace("\ufeff", "")
-    p = p.replace(" ", "")
-
+    p = str(p).strip().replace("\ufeff", "").replace(" ", "")
     if p.startswith("Participant"):
         return p
-
     if p.startswith("P"):
         return "Participant" + p[1:]
-
     return p
 
 # ============================================================
@@ -50,52 +45,61 @@ stackedarea = load_file("stackedarea_metrics.csv", sep="\t")
 datasets = [treemap, pie, line, stackedbar, stackedarea]
 
 # ============================================================
-# NORMALIZE PARTICIPANTS
+# NORMALIZE IDS
 # ============================================================
 
 for df in datasets:
     df["Participant"] = df.iloc[:, 0].apply(normalize)
 
 # ============================================================
-# 🔥 EXTRACT IRRELEVANT RATIO (ROBUST)
+# 🔥 EXTRACT CORRECT TTFF (WICHTIG!)
 # ============================================================
 
-def extract_irrelevant(df):
-    cols = [c for c in df.columns if "Irrelevant" in c]
+def extract_ttff(df):
+    # bevorzugt "Search" → relevante AOI
+    preferred_cols = [c for c in df.columns if "TTFF_Search" in c]
 
-    if len(cols) == 0:
-        return None
-
-    col = cols[0]
+    if len(preferred_cols) > 0:
+        col = preferred_cols[0]
+    else:
+        # fallback: erste TTFF Spalte
+        ttff_cols = [c for c in df.columns if "TTFF" in c]
+        if len(ttff_cols) == 0:
+            return None
+        col = ttff_cols[0]
 
     out = df[["Participant", col]].copy()
-    out.columns = ["Participant", "Irrelevant"]
+    out.columns = ["Participant", "TTFF"]
 
     return out
 
-irr_list = []
+ttff_list = []
 
 for df in datasets:
-    extracted = extract_irrelevant(df)
+    extracted = extract_ttff(df)
     if extracted is not None:
-        irr_list.append(extracted)
+        ttff_list.append(extracted)
 
 # ============================================================
 # COMBINE
 # ============================================================
 
-all_irr = pd.concat(irr_list, ignore_index=True)
+all_ttff = pd.concat(ttff_list, ignore_index=True)
 
 # ============================================================
-# CLEAN
+# 🔥 CLEAN TTFF (JETZT RICHTIG!)
 # ============================================================
 
-all_irr["Irrelevant"] = pd.to_numeric(all_irr["Irrelevant"], errors="coerce")
+all_ttff["TTFF"] = pd.to_numeric(all_ttff["TTFF"], errors="coerce")
 
-all_irr = all_irr.dropna(subset=["Irrelevant"])
+# ❌ entferne NaN
+all_ttff = all_ttff.dropna(subset=["TTFF"])
 
-# gültiger Bereich [0,1]
-all_irr = all_irr[(all_irr["Irrelevant"] >= 0) & (all_irr["Irrelevant"] <= 1)]
+# ❌ entferne 0 → keine Fixation
+all_ttff = all_ttff[all_ttff["TTFF"] > 0]
+
+# ❌ entferne unrealistische Werte (>10 Sekunden)
+all_ttff = all_ttff[all_ttff["TTFF"] <= 10000]
 
 # ============================================================
 # LOAD ANSWERS
@@ -110,42 +114,39 @@ scores = answers.groupby("Participant")["Score"].first().reset_index()
 # DEBUG
 # ============================================================
 
-print("\n=== IRRELEVANT DEBUG ===")
-print("Rows:", len(all_irr))
-print("Participants:", all_irr["Participant"].nunique())
+print("\n=== TTFF DEBUG ===")
+print("Rows:", len(all_ttff))
+print("Participants:", all_ttff["Participant"].nunique())
 
 print("\n=== ANSWERS DEBUG ===")
 print("Participants:", scores["Participant"].nunique())
 
 # ============================================================
-# INTERSECTION
+# MATCH
 # ============================================================
 
-common = set(all_irr["Participant"]) & set(scores["Participant"])
+common = set(all_ttff["Participant"]) & set(scores["Participant"])
 
 print("\n=== INTERSECTION ===")
 print("Common participants:", len(common))
 
 if len(common) == 0:
-    raise ValueError("❌ KEIN MATCH → IDs falsch!")
+    raise ValueError("❌ Kein Match → IDs prüfen!")
 
 # ============================================================
-# FILTER + MERGE
+# MERGE
 # ============================================================
 
-all_irr = all_irr[all_irr["Participant"].isin(common)]
-scores = scores[scores["Participant"].isin(common)]
+df = all_ttff.merge(scores, on="Participant")
 
-df = all_irr.merge(scores, on="Participant")
-
-df = df.dropna(subset=["Irrelevant", "Score"])
+df = df.dropna(subset=["TTFF", "Score"])
 
 print("\n=== FINAL DATA ===")
 print("Rows:", len(df))
 print(df.head())
 
 # ============================================================
-# GROUPS (MEDIAN SPLIT)
+# GROUPS
 # ============================================================
 
 median = df["Score"].median()
@@ -154,11 +155,11 @@ df["Group"] = df["Score"].apply(
     lambda x: "High" if x >= median else "Low"
 )
 
-high = df[df["Group"] == "High"]["Irrelevant"]
-low = df[df["Group"] == "Low"]["Irrelevant"]
+high = df[df["Group"] == "High"]["TTFF"]
+low = df[df["Group"] == "Low"]["TTFF"]
 
 # ============================================================
-# BOXPLOT
+# PLOT
 # ============================================================
 
 plt.figure(figsize=(6, 5))
@@ -169,15 +170,15 @@ np.random.seed(42)
 plt.scatter(np.random.normal(1, 0.04, len(high)), high, alpha=0.7)
 plt.scatter(np.random.normal(2, 0.04, len(low)), low, alpha=0.7)
 
-plt.title("Irrelevant Attention Ratio (All 5 Tasks)")
-plt.ylabel("Irrelevant Ratio")
+plt.title("TTFF to Relevant AOI (All 5 Tasks)")
+plt.ylabel("TTFF (ms)")
 plt.xlabel("Performance Group")
 
 plt.tight_layout()
 plt.show()
 
 # ============================================================
-# MANN-WHITNEY
+# TEST
 # ============================================================
 
 if len(high) >= 2 and len(low) >= 2:

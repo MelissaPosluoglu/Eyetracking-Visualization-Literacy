@@ -21,7 +21,7 @@ def load_file(name, sep=","):
     return df
 
 # ============================================================
-# 🔥 NORMALIZE (WICHTIG!)
+# NORMALIZE (WICHTIG!)
 # ============================================================
 
 def normalize(p):
@@ -57,45 +57,51 @@ for df in datasets:
     df["Participant"] = df.iloc[:, 0].apply(normalize)
 
 # ============================================================
-# 🔥 EXTRACT IRRELEVANT RATIO (ROBUST)
+# 🔥 EXTRACT TRANSITIONS (ROBUST)
 # ============================================================
 
-def extract_irrelevant(df):
-    cols = [c for c in df.columns if "Irrelevant" in c]
+def extract_transitions(df):
+    cols = [c for c in df.columns if "Transitions" in c]
 
     if len(cols) == 0:
         return None
 
-    col = cols[0]
+    # nehme die richtige (nicht "Transitions_per_sec")
+    col = [c for c in cols if "per" not in c.lower()]
+    if len(col) == 0:
+        return None
+
+    col = col[0]
 
     out = df[["Participant", col]].copy()
-    out.columns = ["Participant", "Irrelevant"]
+    out.columns = ["Participant", "Transitions"]
 
     return out
 
-irr_list = []
+trans_list = []
 
 for df in datasets:
-    extracted = extract_irrelevant(df)
+    extracted = extract_transitions(df)
     if extracted is not None:
-        irr_list.append(extracted)
+        trans_list.append(extracted)
 
 # ============================================================
 # COMBINE
 # ============================================================
 
-all_irr = pd.concat(irr_list, ignore_index=True)
+all_trans = pd.concat(trans_list, ignore_index=True)
 
 # ============================================================
 # CLEAN
 # ============================================================
 
-all_irr["Irrelevant"] = pd.to_numeric(all_irr["Irrelevant"], errors="coerce")
+all_trans["Transitions"] = pd.to_numeric(all_trans["Transitions"], errors="coerce")
 
-all_irr = all_irr.dropna(subset=["Irrelevant"])
+all_trans = all_trans.dropna(subset=["Transitions"])
 
-# gültiger Bereich [0,1]
-all_irr = all_irr[(all_irr["Irrelevant"] >= 0) & (all_irr["Irrelevant"] <= 1)]
+# unrealistische Werte raus (optional, aber sinnvoll)
+all_trans = all_trans[all_trans["Transitions"] >= 0]
+all_trans = all_trans[all_trans["Transitions"] <= 200]
 
 # ============================================================
 # LOAD ANSWERS
@@ -110,9 +116,9 @@ scores = answers.groupby("Participant")["Score"].first().reset_index()
 # DEBUG
 # ============================================================
 
-print("\n=== IRRELEVANT DEBUG ===")
-print("Rows:", len(all_irr))
-print("Participants:", all_irr["Participant"].nunique())
+print("\n=== TRANSITIONS DEBUG ===")
+print("Rows:", len(all_trans))
+print("Participants:", all_trans["Participant"].nunique())
 
 print("\n=== ANSWERS DEBUG ===")
 print("Participants:", scores["Participant"].nunique())
@@ -121,7 +127,7 @@ print("Participants:", scores["Participant"].nunique())
 # INTERSECTION
 # ============================================================
 
-common = set(all_irr["Participant"]) & set(scores["Participant"])
+common = set(all_trans["Participant"]) & set(scores["Participant"])
 
 print("\n=== INTERSECTION ===")
 print("Common participants:", len(common))
@@ -133,12 +139,12 @@ if len(common) == 0:
 # FILTER + MERGE
 # ============================================================
 
-all_irr = all_irr[all_irr["Participant"].isin(common)]
+all_trans = all_trans[all_trans["Participant"].isin(common)]
 scores = scores[scores["Participant"].isin(common)]
 
-df = all_irr.merge(scores, on="Participant")
+df = all_trans.merge(scores, on="Participant")
 
-df = df.dropna(subset=["Irrelevant", "Score"])
+df = df.dropna(subset=["Transitions", "Score"])
 
 print("\n=== FINAL DATA ===")
 print("Rows:", len(df))
@@ -154,8 +160,8 @@ df["Group"] = df["Score"].apply(
     lambda x: "High" if x >= median else "Low"
 )
 
-high = df[df["Group"] == "High"]["Irrelevant"]
-low = df[df["Group"] == "Low"]["Irrelevant"]
+high = df[df["Group"] == "High"]["Transitions"]
+low = df[df["Group"] == "Low"]["Transitions"]
 
 # ============================================================
 # BOXPLOT
@@ -169,8 +175,8 @@ np.random.seed(42)
 plt.scatter(np.random.normal(1, 0.04, len(high)), high, alpha=0.7)
 plt.scatter(np.random.normal(2, 0.04, len(low)), low, alpha=0.7)
 
-plt.title("Irrelevant Attention Ratio (All 5 Tasks)")
-plt.ylabel("Irrelevant Ratio")
+plt.title("Transitions (All Tasks)")
+plt.ylabel("Number of Transitions")
 plt.xlabel("Performance Group")
 
 plt.tight_layout()
