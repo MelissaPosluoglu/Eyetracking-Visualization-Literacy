@@ -49,9 +49,14 @@ answers = load_file("answers.csv")
 # ============================================================
 
 def normalize(p):
-    p = str(p).strip()
+    p = str(p).strip().replace("\ufeff", "")
+
+    if p.startswith("Participant"):
+        return p
+
     if p.startswith("P"):
         return "Participant" + p[1:]
+
     return p
 
 for df in [treemap, line, pie, stackedbar, stackedarea]:

@@ -128,16 +128,34 @@ else:
 # PLOT
 # ============================================================
 
-plt.figure(figsize=(6, 5))
+plt.figure(figsize=(7, 5))
 
+# leichtes Jitter NUR wenn nötig (Transitions oft überlappen weniger)
 np.random.seed(42)
-x_jitter = df["Transitions"] + np.random.normal(0, 0.5, size=len(df))
+x_jitter = df["Transitions"] + np.random.normal(0, 0.3, size=len(df))
 
-plt.scatter(x_jitter, df["Score"], alpha=0.6)
+plt.scatter(
+    x_jitter,
+    df["Score"],
+    alpha=0.5,
+    s=50
+)
 
+# Labels (gleich wie anderer Plot)
 plt.xlabel("Number of Transitions")
 plt.ylabel("Performance (Score)")
-plt.title("Transitions vs Performance (All Tasks)")
+plt.title("Transitions vs Performance")
 
+# Statistik anzeigen (gleiches Format!)
+plt.text(
+    df["Transitions"].min(),
+    df["Score"].max() - 0.5,
+    f"Spearman r = {corr:.2f}\np = {p:.3f}",
+    fontsize=10,
+    bbox=dict(facecolor='white', alpha=0.6)
+)
+
+# Cleaner Look
+plt.grid(True, linestyle="--", alpha=0.4)
 plt.tight_layout()
 plt.show()

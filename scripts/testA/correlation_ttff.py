@@ -153,16 +153,35 @@ else:
 # 🔥 SCATTERPLOT
 # ============================================================
 
-plt.figure(figsize=(6, 5))
+plt.figure(figsize=(7, 5))
 
+# Jitter
 np.random.seed(42)
 x_jitter = df["TTFF"] + np.random.normal(0, 100, size=len(df))
 
-plt.scatter(x_jitter, df["Score"], alpha=0.6)
+plt.scatter(
+    x_jitter,
+    df["Score"],
+    alpha=0.5,
+    s=50
+)
 
+# Labels
 plt.xlabel("TTFF (ms)")
 plt.ylabel("Performance (Score)")
-plt.title("TTFF vs Performance (All Tasks)")
+plt.title("TTFF vs Performance")
+
+# Statistik Box
+plt.text(
+    df["TTFF"].min(),
+    df["Score"].max() - 0.5,
+    f"Spearman r = {corr:.2f}\np = {p:.3f}",
+    fontsize=10,
+    bbox=dict(facecolor='white', alpha=0.6)
+)
+
+# 🔥 DAS IST DER WICHTIGE TEIL
+plt.grid(True, linestyle="--", alpha=0.4)
 
 plt.tight_layout()
 plt.show()

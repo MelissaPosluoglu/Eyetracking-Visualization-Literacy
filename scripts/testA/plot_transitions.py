@@ -175,7 +175,7 @@ np.random.seed(42)
 plt.scatter(np.random.normal(1, 0.04, len(high)), high, alpha=0.7)
 plt.scatter(np.random.normal(2, 0.04, len(low)), low, alpha=0.7)
 
-plt.title("Transitions (All Tasks)")
+plt.title("Transitions (All 5 Tasks)")
 plt.ylabel("Number of Transitions")
 plt.xlabel("Performance Group")
 

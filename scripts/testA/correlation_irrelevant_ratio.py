@@ -1,8 +1,11 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 from scipy.stats import spearmanr
 import os
+
+
 
 # ============================================================
 # PATH
@@ -12,14 +15,13 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 DATA_PATH = os.path.join(BASE_DIR, "data", "testA")
 
 # ============================================================
-# LOAD + CLEAN FUNCTION (ROBUST)
+# LOAD FUNCTION
 # ============================================================
 
 def load_file(name, sep=","):
     path = os.path.join(DATA_PATH, name)
     df = pd.read_csv(path, sep=sep)
 
-    # Spalten säubern
     df.columns = (
         df.columns
         .str.strip()
@@ -27,11 +29,10 @@ def load_file(name, sep=","):
         .str.replace("(", "")
         .str.replace(")", "")
     )
-
     return df
 
 # ============================================================
-# LOAD ALL TASKS
+# LOAD DATA
 # ============================================================
 
 treemap = load_file("treemap_metrics.csv")
@@ -41,7 +42,7 @@ stackedbar = load_file("stackedbar_metrics.csv")
 stackedarea = load_file("stackedarea_metrics.csv", sep="\t")
 
 # ============================================================
-# PARTICIPANT NORMALIZATION
+# NORMALIZE PARTICIPANTS
 # ============================================================
 
 def normalize(p):
@@ -54,13 +55,10 @@ for df in [treemap, line, pie, stackedbar, stackedarea]:
     df["Participant"] = df.iloc[:, 0].apply(normalize)
 
 # ============================================================
-# EXTRACT IRRELEVANT RATIO (JETZT EINHEITLICH!)
+# EXTRACT IRRELEVANT
 # ============================================================
 
 def extract_irrelevant(df):
-    if "Irrelevant_Ratio" not in df.columns:
-        raise ValueError(f"Irrelevant_Ratio fehlt in {df.columns}")
-
     return df[["Participant", "Irrelevant_Ratio"]].rename(
         columns={"Irrelevant_Ratio": "Irrelevant"}
     )
@@ -72,69 +70,65 @@ stackedbar = extract_irrelevant(stackedbar)
 stackedarea = extract_irrelevant(stackedarea)
 
 # ============================================================
-# COMBINE ALL TASKS
+# COMBINE
 # ============================================================
 
 all_data = pd.concat([treemap, line, pie, stackedbar, stackedarea], ignore_index=True)
 
 # ============================================================
-# LOAD PERFORMANCE DATA
+# PERFORMANCE
 # ============================================================
 
 answers = load_file("answers.csv")
-
-# Score pro Participant holen
 scores = answers.groupby("Participant")["Score"].first().reset_index()
-
-# ============================================================
-# MERGE
-# ============================================================
 
 df = all_data.merge(scores, on="Participant")
 
-# ============================================================
-# CLEAN
-# ============================================================
-
-df = df.dropna(subset=["Irrelevant", "Score"])
-
-df["Irrelevant"] = pd.to_numeric(df["Irrelevant"], errors="coerce")
-df["Score"] = pd.to_numeric(df["Score"], errors="coerce")
-
 df = df.dropna()
+df["Irrelevant"] = pd.to_numeric(df["Irrelevant"])
+df["Score"] = pd.to_numeric(df["Score"])
 
 # ============================================================
-# 🔥 SPEARMAN CORRELATION (HAUPTERGEBNIS)
+# CORRELATION
 # ============================================================
 
 corr, p = spearmanr(df["Irrelevant"], df["Score"])
 
-print("\n==============================")
-print(" SPEARMAN CORRELATION (ALL TASKS)")
-print("==============================")
-print(f"r = {corr:.3f}")
-print(f"p = {p:.5f}")
-
-if p < 0.05:
-    print("→ SIGNIFICANT correlation")
-else:
-    print("→ No significant correlation")
+print(f"Spearman r = {corr:.3f}, p = {p:.5f}")
 
 # ============================================================
-# 🔥 SCATTERPLOT (SAUBER)
+# 🔥 FINAL CLEAN SCATTER (NO REGRESSION, NO BINNING)
 # ============================================================
 
-plt.figure(figsize=(6, 5))
+plt.figure(figsize=(7, 5))
 
-# leichtes jitter für bessere Sichtbarkeit
+# Jitter (wichtig für gleiche Optik)
 np.random.seed(42)
-x_jitter = df["Irrelevant"] + np.random.normal(0, 0.01, size=len(df))
+x_jitter = df["Irrelevant"] + np.random.normal(0, 0.005, size=len(df))
 
-plt.scatter(x_jitter, df["Score"], alpha=0.6)
+plt.scatter(
+    x_jitter,
+    df["Score"],
+    alpha=0.5,
+    s=50
+)
 
-plt.xlabel("Irrelevant Attention (Ratio)")
+# Labels
+plt.xlabel("Irrelevant Ratio")
 plt.ylabel("Performance (Score)")
-plt.title("Irrelevant Attention vs Performance (All Tasks)")
+plt.title("Irrelevant Ratio vs Performance")
+
+# 🔥 IDENTISCHE POSITION wie Transitions
+plt.text(
+    df["Irrelevant"].min(),
+    df["Score"].max() - 0.5,
+    f"Spearman r = {corr:.2f}\np = {p:.3f}",
+    fontsize=10,
+    bbox=dict(facecolor='white', alpha=0.6)
+)
+
+# 🔥 IDENTISCHES GRID
+plt.grid(True, linestyle="--", alpha=0.4)
 
 plt.tight_layout()
 plt.show()

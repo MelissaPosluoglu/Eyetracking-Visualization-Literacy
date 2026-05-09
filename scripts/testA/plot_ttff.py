@@ -21,15 +21,22 @@ def load_file(name, sep=","):
     return df
 
 # ============================================================
-# NORMALIZE PARTICIPANTS
+# 🔥 FINAL NORMALIZE (FIXT DEIN HAUPTPROBLEM)
 # ============================================================
 
 def normalize(p):
-    p = str(p).strip().replace("\ufeff", "").replace(" ", "")
+    p = str(p).strip()
+    p = p.replace("\ufeff", "")
+    p = p.replace(" ", "")
+
+    # schon korrekt → nichts tun
     if p.startswith("Participant"):
         return p
+
+    # P1 → Participant1
     if p.startswith("P"):
         return "Participant" + p[1:]
+
     return p
 
 # ============================================================
@@ -45,28 +52,23 @@ stackedarea = load_file("stackedarea_metrics.csv", sep="\t")
 datasets = [treemap, pie, line, stackedbar, stackedarea]
 
 # ============================================================
-# NORMALIZE IDS
+# NORMALIZE PARTICIPANTS
 # ============================================================
 
 for df in datasets:
     df["Participant"] = df.iloc[:, 0].apply(normalize)
 
 # ============================================================
-# 🔥 EXTRACT CORRECT TTFF (WICHTIG!)
+# TTFF EXTRACTION (ROBUST)
 # ============================================================
 
 def extract_ttff(df):
-    # bevorzugt "Search" → relevante AOI
-    preferred_cols = [c for c in df.columns if "TTFF_Search" in c]
+    ttff_cols = [c for c in df.columns if "TTFF" in c]
 
-    if len(preferred_cols) > 0:
-        col = preferred_cols[0]
-    else:
-        # fallback: erste TTFF Spalte
-        ttff_cols = [c for c in df.columns if "TTFF" in c]
-        if len(ttff_cols) == 0:
-            return None
-        col = ttff_cols[0]
+    if len(ttff_cols) == 0:
+        return None
+
+    col = ttff_cols[0]
 
     out = df[["Participant", col]].copy()
     out.columns = ["Participant", "TTFF"]
@@ -87,31 +89,25 @@ for df in datasets:
 all_ttff = pd.concat(ttff_list, ignore_index=True)
 
 # ============================================================
-# 🔥 CLEAN TTFF (JETZT RICHTIG!)
+# CLEAN TTFF
 # ============================================================
 
 all_ttff["TTFF"] = pd.to_numeric(all_ttff["TTFF"], errors="coerce")
-
-# ❌ entferne NaN
 all_ttff = all_ttff.dropna(subset=["TTFF"])
-
-# ❌ entferne 0 → keine Fixation
-all_ttff = all_ttff[all_ttff["TTFF"] > 0]
-
-# ❌ entferne unrealistische Werte (>10 Sekunden)
-all_ttff = all_ttff[all_ttff["TTFF"] <= 10000]
+all_ttff = all_ttff[all_ttff["TTFF"] >= 0]
 
 # ============================================================
 # LOAD ANSWERS
 # ============================================================
 
 answers = load_file("answers.csv")
+
 answers["Participant"] = answers["Participant"].apply(normalize)
 
 scores = answers.groupby("Participant")["Score"].first().reset_index()
 
 # ============================================================
-# DEBUG
+# 🔥 DEBUG (JETZT MUSS MATCHEN)
 # ============================================================
 
 print("\n=== TTFF DEBUG ===")
@@ -121,8 +117,12 @@ print("Participants:", all_ttff["Participant"].nunique())
 print("\n=== ANSWERS DEBUG ===")
 print("Participants:", scores["Participant"].nunique())
 
+print("\nBeispiele:")
+print("TTFF:", sorted(all_ttff["Participant"].unique())[:5])
+print("ANSWERS:", sorted(scores["Participant"].unique())[:5])
+
 # ============================================================
-# MATCH
+# INTERSECTION
 # ============================================================
 
 common = set(all_ttff["Participant"]) & set(scores["Participant"])
@@ -131,13 +131,20 @@ print("\n=== INTERSECTION ===")
 print("Common participants:", len(common))
 
 if len(common) == 0:
-    raise ValueError("❌ Kein Match → IDs prüfen!")
+    raise ValueError("❌ Immer noch kein Match → Daten prüfen!")
 
 # ============================================================
-# MERGE
+# FILTER + MERGE
 # ============================================================
+
+all_ttff = all_ttff[all_ttff["Participant"].isin(common)]
+scores = scores[scores["Participant"].isin(common)]
 
 df = all_ttff.merge(scores, on="Participant")
+
+# ============================================================
+# FINAL CLEAN
+# ============================================================
 
 df = df.dropna(subset=["TTFF", "Score"])
 
@@ -146,7 +153,7 @@ print("Rows:", len(df))
 print(df.head())
 
 # ============================================================
-# GROUPS
+# GROUPS (MEDIAN SPLIT)
 # ============================================================
 
 median = df["Score"].median()
@@ -159,7 +166,7 @@ high = df[df["Group"] == "High"]["TTFF"]
 low = df[df["Group"] == "Low"]["TTFF"]
 
 # ============================================================
-# PLOT
+# BOXPLOT
 # ============================================================
 
 plt.figure(figsize=(6, 5))
@@ -178,7 +185,7 @@ plt.tight_layout()
 plt.show()
 
 # ============================================================
-# TEST
+# MANN-WHITNEY TEST
 # ============================================================
 
 if len(high) >= 2 and len(low) >= 2:
