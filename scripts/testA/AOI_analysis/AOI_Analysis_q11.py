@@ -9,6 +9,7 @@ from PIL import Image
 # PATHS
 # ============================================================
 
+# Define project, data, stimulus, and output directories
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA_PATH = os.path.join(BASE_DIR, "data", "testA")
 STIM_PATH = os.path.join(DATA_PATH, "stimuli")
@@ -16,10 +17,11 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "results", "testA")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+# Participants included in the analysis
 PARTICIPANTS = ["Participant4"]
 
 # ============================================================
-# AOIs
+# AOIs FOR QUESTION 11
 # ============================================================
 
 def get_aois_q11():
@@ -36,7 +38,7 @@ def get_aois_q11():
     ]
 
 # ============================================================
-# HELPERS
+# HELPER FUNCTIONS
 # ============================================================
 
 def extract_question_id(event_value):
@@ -51,17 +53,18 @@ def get_fixations_for_question(df, question_label):
         (df["Event value"] == question_label)
         ]
 
+    # Skip if no relevant timing event is available
     if len(url_events) < 1:
         return None, None
 
     t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
     t_end = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
 
-    # 🔥 FIX: fallback bei kaputten Logs
+    
     if pd.isna(t_end) or (t_end - t_start) > 30000:
         t_end = t_start + 25000
 
-    duration = (t_end - t_start)  # 🔥 ms (KEIN /1000!)
+    duration = (t_end - t_start) 
 
     fix = df[
         (df["Eye movement type"] == "Fixation") &
@@ -101,6 +104,7 @@ def map_aois(fix, aois):
                 assigned = True
                 break
 
+        # Fallback if no AOI matches
         if not assigned:
             names.append("background")
             types.append("irrelevant")
@@ -116,48 +120,40 @@ def map_aois(fix, aois):
 
 def compute_metrics(fix, duration):
     """
-    FINAL stable version
-    duration in milliseconds
+    Compute AOI-based eye-tracking metrics for Question 11.
+
+    The duration is expected to be in milliseconds.
     """
 
-    # =========================================================
-    # DWELL TIME
-    # =========================================================
+    # Sum dwell time per AOI
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
     total_dwell = dwell.sum()
 
-    # 🔥 IMPORTANT: compute irrelevant BEFORE scaling
+     # Compute irrelevant dwell time before scaling
     irrelevant = fix[fix["AOI_type"] == "irrelevant"]["Gaze event duration"].sum()
 
-    # 🔥 FIX: normalize EVERYTHING consistently
+    # Normalize dwell time if total fixation duration exceeds trial duration
     if total_dwell > duration and duration > 0:
         scale = duration / total_dwell
 
         dwell = dwell * scale
-        irrelevant = irrelevant * scale   # ✅ FIXED !!!
+        irrelevant = irrelevant * scale  
 
         total_dwell = dwell.sum()
 
-    # =========================================================
-    # DWELL RATIOS
-    # =========================================================
     dwell_ratio = {
         k: (v / total_dwell if total_dwell > 0 else 0)
         for k, v in dwell.items()
     }
 
-    # =========================================================
-    # TTFF
-    # =========================================================
+
     def ttff(target):
         subset = fix[fix["AOI"] == target]
         if subset.empty:
             return np.nan
         return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]) / 1000
 
-    # =========================================================
-    # SEQUENCE + TRANSITIONS
-    # =========================================================
+    # Create AOI sequence and remove consecutive duplicates
     seq = fix["AOI"].tolist()
 
     seq_clean = [
@@ -165,6 +161,7 @@ def compute_metrics(fix, duration):
         if i == 0 or seq[i] != seq[i - 1]
     ]
 
+    # Build transition matrix from cleaned scanpath sequence
     if len(seq_clean) >= 2:
         transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
         trans_df = pd.DataFrame(transitions, columns=["from", "to"])
@@ -179,9 +176,7 @@ def compute_metrics(fix, duration):
         if duration > 0 else 0
     )
 
-    # =========================================================
-    # IRRELEVANT RATIO (NOW CORRECT)
-    # =========================================================
+    # Background dwell ratio after normalization
     irrelevant_ratio = (
         irrelevant / total_dwell if total_dwell > 0 else 0
     )
@@ -211,7 +206,7 @@ def compute_metrics(fix, duration):
     }
 
 # ============================================================
-# OVERLAY (UNVERÄNDERT)
+# OVERLAY 
 # ============================================================
 
 def plot_aoi_overlay():
@@ -232,6 +227,7 @@ def plot_aoi_overlay():
 
     for aoi in aois:
 
+         # Highlight the target AOI in red
         color = "#ff2d2d" if aoi["name"] == "year_2012" else ("#1f4aff" if aoi["type"] == "relevant" else "#999999")
 
         x1 = aoi["x1"] * w
@@ -256,7 +252,7 @@ def plot_aoi_overlay():
     print("✔ AOI Overlay gespeichert:", save_path)
 
 # ============================================================
-# MAIN
+# PARTICIPANT ANALYSIS
 # ============================================================
 
 def run_analysis(participant):
@@ -280,6 +276,7 @@ def run_analysis(participant):
 
         fix = map_aois(fix, get_aois_q11())
 
+        # Debug output to inspect AOI assignment and dwell times
         print("\n==============================")
         print("AOI Counts fuer", participant)
         print(fix["AOI"].value_counts())
@@ -308,6 +305,7 @@ def run_analysis(participant):
 
 if __name__ == "__main__":
 
+    # Create AOI overlay for visual inspection
     plot_aoi_overlay()
 
     all_results, all_matrices = [], []
@@ -327,4 +325,4 @@ if __name__ == "__main__":
     if all_matrices:
         pd.concat(all_matrices).to_csv(os.path.join(OUTPUT_DIR, "transition_matrix_q11.csv"), index=False)
 
-    print("\n✔ FINAL: Q11 stabil & korrekt")
+    print("\n✔ Final: Q11 analysis completed successfully")

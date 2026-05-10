@@ -8,14 +8,19 @@ import numpy as np
 
 # =========================
 # SETTINGS
+# =========================
+
+# Participant and question settings
 PARTICIPANT = ("Participant20")
 QUESTION_ID =7
 GRID_SIZE = (6, 6)
 CROP_BOX = (570, 20, 1326, 980)
+
 # =========================
 # PATHS
 # =========================
 
+# Define project root and input/output paths
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 DATA_FILE = PROJECT_ROOT / "data" / "testA" / f"{PARTICIPANT}.tsv"
@@ -42,6 +47,7 @@ events = df[
     (df["Event value"].astype(str).str.contains("Question", na=False))
     ].sort_values("Recording timestamp")
 
+# Select the start event for the current question
 current_event = events[
     events["Event value"].astype(str).str.contains(f"Question {QUESTION_ID}", na=False)
 ]
@@ -60,15 +66,17 @@ else:
 print(f"Question {QUESTION_ID} window: {start_time} -> {end_time}")
 
 # =========================
-# EXTRACT + CLEAN FIXATIONS
+# EXTRACT + FIXATIONS
 # =========================
 
+# Keep only fixation events within the detected question window
 fix = df[
     (df["Eye movement type"] == "Fixation") &
     (df["Recording timestamp"] >= start_time) &
     (df["Recording timestamp"] < end_time)
     ].copy()
 
+# Remove extremely short or long fixations
 fix = fix[
     (fix["Gaze event duration"] >= 80) &
     (fix["Gaze event duration"] <= 1000)
@@ -117,17 +125,20 @@ fix["X_px"] += x_off
 fix["Y_px"] += y_off
 
 # =========================
-# APPLY CROP
+# APPLY IMAGE CROP
 # =========================
 
+# Crop the stimulus image to the relevant chart area
 crop_left, crop_top, crop_right, crop_bottom = CROP_BOX
 
 img = img_full.crop(CROP_BOX)
 img_w, img_h = img.size
 
+# Convert full-image fixation coordinates into crop-relative coordinates
 fix["X_crop"] = fix["X_px"] - crop_left
 fix["Y_crop"] = fix["Y_px"] - crop_top
 
+# Keep only fixations that fall inside the cropped image area
 fix = fix[
     (fix["X_crop"] >= 0) &
     (fix["X_crop"] < img_w) &
@@ -144,6 +155,7 @@ if fix.empty:
 # CREATE GRID
 # =========================
 
+# Create a grid over the cropped stimulus area
 grid = GridRegionSet(size=(img_w, img_h), gridsize=GRID_SIZE, label=f"Q{QUESTION_ID}Grid")
 
 print("Grid:", grid.gridsize)
@@ -159,11 +171,13 @@ def find_region_id(x, y, cells):
             return i
     return None
 
+# Assign each fixation to a grid cell
 fix["regionid"] = fix.apply(
     lambda row: find_region_id(row["X_crop"], row["Y_crop"], grid.cells),
     axis=1
 )
 
+# Remove fixations that could not be assigned to a grid cell
 fix = fix.dropna(subset=["regionid"]).copy()
 fix["regionid"] = fix["regionid"].astype(int)
 
@@ -171,20 +185,20 @@ fix["regionid"] = fix["regionid"].astype(int)
 # GRID ENTROPY
 # =========================
 
-# Anzahl Fixationen pro Grid-Zelle
+# Count fixations per grid cell
 counts = fix["regionid"].value_counts().sort_index()
 
-# Wahrscheinlichkeiten pro Grid-Zelle
+# Convert fixation counts into probabilities
 probs = counts / counts.sum()
 
-# Entropy berechnen
+# Compute Shannon entropy across grid cells
 grid_entropy = -np.sum(probs * np.log2(probs))
 
-# Maximale Entropy bei 6x6 Grid
+# Maximum possible entropy for the selected grid size
 total_regions = GRID_SIZE[0] * GRID_SIZE[1]
 max_entropy = np.log2(total_regions)
 
-# Normalisierte Entropy zwischen 0 und 1
+# Normalize entropy to a range between 0 and 1
 normalized_entropy = grid_entropy / max_entropy
 
 print("grid_entropy:", round(grid_entropy, 3))
@@ -199,7 +213,7 @@ import pandas as pd
 
 sequence = fix["regionid"].tolist()
 
-# alle Übergänge sammeln
+
 transitions = []
 
 for i in range(len(sequence) - 1):
@@ -219,34 +233,35 @@ transition_matrix = pd.crosstab(
 print("Transition Matrix:")
 print(transition_matrix)
 
-# speichern
+
 TRANS_PATH = OUTPUT_DIR / f"{PARTICIPANT}_Question{QUESTION_ID}_TRANSITIONS.csv"
 transition_matrix.to_csv(TRANS_PATH)
 
 print("Saved transitions:", TRANS_PATH)
+
 # =========================
 # ADVANCED GRID METRICS
 # =========================
 
-# Reihenfolge der Regionen
+# Region sequence used for scanpath metrics
 sequence = fix["regionid"].tolist()
 
-# 1. first fixated region
+# First grid region fixated
 first_fixated_region = sequence[0] if sequence else None
 
-# 2. number of visited regions
+# Number of unique grid regions visited
 number_of_visited_regions = len(set(sequence))
 
 # total number of grid cells
 total_regions = GRID_SIZE[0] * GRID_SIZE[1]
 
-# 3. grid coverage = Anteil besuchter Grid-Zellen
+#  grid coverage 
 grid_coverage = number_of_visited_regions / total_regions
 
-# 4. proportion empty regions = Anteil nicht besuchter Grid-Zellen
+# proportion empty regions
 proportion_empty_regions = 1 - grid_coverage
 
-# 4. revisit count
+# revisit count
 seen = set()
 revisit_count = 0
 
@@ -256,7 +271,7 @@ for r in sequence:
     else:
         seen.add(r)
 
-# 5. transition count
+#  transition count
 transition_count = max(len(sequence) - 1, 0)
 
 print("first_fixated_region:", first_fixated_region)
