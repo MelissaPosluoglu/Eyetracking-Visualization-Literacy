@@ -158,4 +158,4 @@ out_path = os.path.join(
 plt.savefig(out_path, dpi=300)
 plt.close()
 
-print("✅ Clean, filtered saccade visualization saved.")
+print(" Clean, filtered saccade visualization saved.")

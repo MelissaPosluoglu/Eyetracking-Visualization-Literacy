@@ -66,7 +66,7 @@ for df in datasets:
     df["Participant"] = df.iloc[:, 0].apply(normalize)
 
 # ============================================================
-# 🔥 EXTRACT TTFF (ROBUST)
+# EXTRACT TTFF (ROBUST)
 # ============================================================
 
 def extract_ttff(df):
@@ -105,7 +105,7 @@ all_ttff["TTFF"] = pd.to_numeric(all_ttff["TTFF"], errors="coerce")
 all_ttff = all_ttff.dropna(subset=["TTFF"])
 all_ttff = all_ttff[all_ttff["TTFF"] >= 0]
 
-# 🔥 optional aber sinnvoll: extremwerte raus
+# optional aber sinnvoll: extremwerte raus
 all_ttff = all_ttff[all_ttff["TTFF"] <= 25000]
 
 # ============================================================
@@ -133,7 +133,7 @@ df["Score"] = pd.to_numeric(df["Score"], errors="coerce")
 df = df.dropna(subset=["TTFF", "Score"])
 
 # ============================================================
-# 🔥 SPEARMAN CORRELATION
+# SPEARMAN CORRELATION
 # ============================================================
 
 corr, p = spearmanr(df["TTFF"], df["Score"])
@@ -150,7 +150,7 @@ else:
     print("→ No significant correlation")
 
 # ============================================================
-# 🔥 SCATTERPLOT
+# SCATTERPLOT
 # ============================================================
 
 plt.figure(figsize=(7, 5))
@@ -180,7 +180,6 @@ plt.text(
     bbox=dict(facecolor='white', alpha=0.6)
 )
 
-# 🔥 DAS IST DER WICHTIGE TEIL
 plt.grid(True, linestyle="--", alpha=0.4)
 
 plt.tight_layout()

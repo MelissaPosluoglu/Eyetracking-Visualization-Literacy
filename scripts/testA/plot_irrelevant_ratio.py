@@ -194,4 +194,4 @@ if len(high) >= 2 and len(low) >= 2:
     else:
         print("→ No significant difference")
 else:
-    print("❌ Not enough data")
+    print(" Not enough data")

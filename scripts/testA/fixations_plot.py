@@ -13,10 +13,10 @@ matplotlib.use("Agg")
 # ============================================================
 # CONFIG
 # ============================================================
-PARTICIPANT = "Participant20"
-QUESTION_ID = 1
+PARTICIPANT = "Participant53"
+QUESTION_ID =3
 
-DATA_FILE = os.path.join("..", "..", "data", "testA", f"{PARTICIPANT}.tsv")
+DATA_FILE = os.path.join("..", "..", "data", "testC", f"{PARTICIPANT}.tsv")
 IMAGE_PATH = os.path.join("..", "..", "data", "testA", "stimuli", f"Question{QUESTION_ID}.png")
 OUTPUT_DIR = os.path.join("..", "..", "results", "testA", PARTICIPANT.lower(), "fixations_clean")
 
@@ -174,4 +174,4 @@ out_path = os.path.join(
 plt.savefig(out_path, dpi=300, bbox_inches="tight")
 plt.close()
 
-print("✅ Clean fixation plot with same shift logic as scanpath saved.")
+print("Clean fixation plot with same shift logic as scanpath saved.")

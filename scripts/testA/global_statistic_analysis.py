@@ -39,7 +39,7 @@ def safe_col(df, name):
     return df[name]
 
 # ============================================================
-# COLLECT RAW DATA (WICHTIGSTER FIX 🔥)
+# COLLECT RAW DATA (WICHTIGSTER FIX )
 # ============================================================
 
 TTFF_all = []

@@ -29,7 +29,7 @@ sns.boxplot(
     color="#4C72B0",
     width=0.6,
     showfliers=True,
-    medianprops=dict(color="red", linewidth=2)   # 🔴 Median rot
+    medianprops=dict(color="red", linewidth=2)   #  Median rot
 )
 
 sns.stripplot(
@@ -40,7 +40,7 @@ sns.stripplot(
     marker="o",
     edgecolor="black",
     linewidth=1,
-    facecolor="none",     # 🔵 nicht ausgefüllt
+    facecolor="none",     #  nicht ausgefüllt
     size=6,
     alpha=1
 )

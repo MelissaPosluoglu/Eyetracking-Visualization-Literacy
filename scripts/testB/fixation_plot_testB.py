@@ -16,12 +16,12 @@ matplotlib.use("Agg")
 # ----------------------------------------------------
 # Configuration
 # ----------------------------------------------------
-PARTICIPANT = ("Participant41")
+PARTICIPANT = ("Participant51")
 QUESTION_ID = 12
 
-DATA_FILE = os.path.join("..","..", "..", "data", "testB", f"{PARTICIPANT}.tsv")
-IMAGE_PATH = os.path.join("..","..", "..", "data", "testB", "stimuli", f"Question{QUESTION_ID}.png")
-OUTPUT_DIR = os.path.join("..","..", "..", "results", "testB", PARTICIPANT.lower(), "fixations")
+DATA_FILE = os.path.join("..","..","data", "testC", f"{PARTICIPANT}.tsv")
+IMAGE_PATH = os.path.join("..","..", "data", "testB", "stimuli", f"Question{QUESTION_ID}.png")
+OUTPUT_DIR = os.path.join("..","..", "results", "testB", PARTICIPANT.lower(), "fixations")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -130,5 +130,5 @@ out_path = os.path.join(
 plt.savefig(out_path, dpi=300, bbox_inches="tight")
 plt.close()
 
-print("✅ Clean fixation plot saved.")
-print("📁 Saved to:", out_path)
+print("Clean fixation plot saved.")
+print("Saved to:", out_path)

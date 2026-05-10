@@ -123,4 +123,4 @@ output_path = os.path.join(
 plt.savefig(output_path, dpi=300)
 plt.close()
 
-print("✅ Fixation Boxplot saved:", output_path)
+print("Fixation Boxplot saved:", output_path)

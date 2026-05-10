@@ -102,4 +102,4 @@ output_path = os.path.join(
 plt.savefig(output_path, dpi=300)
 plt.close()
 
-print("✅ Plot saved:", output_path)
+print("Plot saved:", output_path)

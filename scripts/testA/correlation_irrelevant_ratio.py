@@ -97,7 +97,7 @@ corr, p = spearmanr(df["Irrelevant"], df["Score"])
 print(f"Spearman r = {corr:.3f}, p = {p:.5f}")
 
 # ============================================================
-# 🔥 FINAL CLEAN SCATTER (NO REGRESSION, NO BINNING)
+# FINAL CLEAN SCATTER (NO REGRESSION, NO BINNING)
 # ============================================================
 
 plt.figure(figsize=(7, 5))
@@ -118,7 +118,7 @@ plt.xlabel("Irrelevant Ratio")
 plt.ylabel("Performance (Score)")
 plt.title("Irrelevant Ratio vs Performance")
 
-# 🔥 IDENTISCHE POSITION wie Transitions
+#  IDENTISCHE POSITION wie Transitions
 plt.text(
     df["Irrelevant"].min(),
     df["Score"].max() - 0.5,
@@ -127,7 +127,7 @@ plt.text(
     bbox=dict(facecolor='white', alpha=0.6)
 )
 
-# 🔥 IDENTISCHES GRID
+# IDENTISCHES GRID
 plt.grid(True, linestyle="--", alpha=0.4)
 
 plt.tight_layout()
