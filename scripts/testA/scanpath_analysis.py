@@ -290,5 +290,5 @@ fix_export = fix[[
 fix_export.columns = ["t", "x", "y"]
 fix_export.to_csv(paths["fix"], index=False)
 
-print("\n✅ Finale Fixationen:", len(fix))
-print("📁 Gespeichert in:", paths["dir"])
+print("\n Finale Fixationen:", len(fix))
+print(" Gespeichert in:", paths["dir"])

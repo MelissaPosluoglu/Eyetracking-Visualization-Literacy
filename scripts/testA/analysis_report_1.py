@@ -9,7 +9,7 @@ from reportlab.lib.units import inch
 from reportlab.lib.pagesizes import A4
 
 # ---------------------------------------------------
-# 1️⃣ Dateien laden
+# 1Dateien laden
 # ---------------------------------------------------
 
 folder_path = "../../data/testA/"
@@ -23,7 +23,7 @@ all_results = []
 print("Found participants:", len(files))
 
 # ---------------------------------------------------
-# 2️⃣ Verarbeitung
+#  Verarbeitung
 # ---------------------------------------------------
 
 for file in files:
@@ -41,7 +41,7 @@ for file in files:
             break
 
     if timestamp_col is None:
-        print(f"⚠️ Keine Timestamp-Spalte in {file}")
+        print(f" Keine Timestamp-Spalte in {file}")
         continue
 
     df = df.rename(columns={timestamp_col: "Recording timestamp"})
@@ -56,7 +56,7 @@ for file in files:
             break
 
     if duration_col is None:
-        print(f"⚠️ Keine Duration-Spalte in {file}")
+        print(f" Keine Duration-Spalte in {file}")
         continue
 
     df = df.rename(columns={duration_col: "Gaze event duration"})
@@ -71,7 +71,7 @@ for file in files:
             break
 
     if index_col is None:
-        print(f"⚠️ Keine Index-Spalte in {file}")
+        print(f" Keine Index-Spalte in {file}")
         continue
 
     df = df.rename(columns={index_col: "Eye movement type index"})
@@ -144,7 +144,7 @@ for file in files:
         ])
 
 # ---------------------------------------------------
-# 3️⃣ DataFrame + Filter
+# DataFrame + Filter
 # ---------------------------------------------------
 
 result_df = pd.DataFrame(all_results, columns=[
@@ -159,7 +159,7 @@ result_df["Visualization"] = result_df["Question"].str.replace(
     r"Question \d+ – ", "", regex=True
 )
 
-# 🔥 globaler Filter
+# globaler Filter
 result_df = result_df[
     result_df["Participant"].str.extract(r'(\d+)').astype(int)[0] <= 28
     ]
@@ -167,7 +167,7 @@ result_df = result_df[
 participants = result_df["Participant"].unique()
 
 # ---------------------------------------------------
-# 4️⃣ PDF
+# PDF
 # ---------------------------------------------------
 
 pdf_file = "All_Participants_Report.pdf"
@@ -238,10 +238,10 @@ for p in participants:
 
 doc.build(elements)
 
-print("✅ PDF erstellt:", pdf_file)
+print("PDF erstellt:", pdf_file)
 
 # ---------------------------------------------------
-# 5️⃣ ANOVA
+# ANOVA
 # ---------------------------------------------------
 
 try:
@@ -270,5 +270,5 @@ try:
     print("\nPosthoc:\n", posthoc)
 
 except ImportError:
-    print("\n⚠️ pingouin nicht installiert → ANOVA übersprungen")
-    print("👉 pip install pingouin")
+    print("\n pingouin nicht installiert → ANOVA übersprungen")
+    print("pip install pingouin")

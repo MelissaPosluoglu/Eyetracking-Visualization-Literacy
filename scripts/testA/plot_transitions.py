@@ -57,7 +57,7 @@ for df in datasets:
     df["Participant"] = df.iloc[:, 0].apply(normalize)
 
 # ============================================================
-# 🔥 EXTRACT TRANSITIONS (ROBUST)
+# EXTRACT TRANSITIONS (ROBUST)
 # ============================================================
 
 def extract_transitions(df):
@@ -133,7 +133,7 @@ print("\n=== INTERSECTION ===")
 print("Common participants:", len(common))
 
 if len(common) == 0:
-    raise ValueError("❌ KEIN MATCH → IDs falsch!")
+    raise ValueError(" KEIN MATCH → IDs falsch!")
 
 # ============================================================
 # FILTER + MERGE
@@ -200,4 +200,4 @@ if len(high) >= 2 and len(low) >= 2:
     else:
         print("→ No significant difference")
 else:
-    print("❌ Not enough data")
+    print("Not enough data")

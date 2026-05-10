@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
 
 # ============================================================
-# PATH SETUP (ROBUST 🔥)
+# PATH SETUP (ROBUST )
 # ============================================================
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -39,7 +39,7 @@ def clean_ttff(series):
 def safe(df, col):
     """Safer column access with debug"""
     if col not in df.columns:
-        raise ValueError(f"\n❌ Column '{col}' not found.\nAvailable columns:\n{df.columns.tolist()}")
+        raise ValueError(f"\n Column '{col}' not found.\nAvailable columns:\n{df.columns.tolist()}")
     return df[col]
 
 # ============================================================
@@ -63,7 +63,7 @@ df8 = pd.DataFrame({
 })
 
 # --- Q11 (Stacked Area) ---
-# ⚠️ Sekunden → ms umrechnen!
+#  Sekunden → ms umrechnen!
 df11 = pd.DataFrame({
     "TTFF": clean_ttff(safe(q11, "TTFF 2012 (s)") * 1000),
     "Irrelevant": safe(q11, "Irrelevant Ratio"),
@@ -146,4 +146,4 @@ scatter_plot(df_all["Irrelevant"], df_all["Transitions"],
 
 print("✔ Plots saved in:", OUTPUT_PATH)
 
-print("\n🔥 DONE — Everything correct & paper-ready")
+print("\n DONE — Everything correct & paper-ready")

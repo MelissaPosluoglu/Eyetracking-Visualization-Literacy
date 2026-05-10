@@ -37,7 +37,7 @@ def clean_ttff(series):
 
 def safe(df, col):
     if col not in df.columns:
-        raise ValueError(f"\n❌ Column '{col}' not found.\nAvailable:\n{df.columns.tolist()}")
+        raise ValueError(f"\n Column '{col}' not found.\nAvailable:\n{df.columns.tolist()}")
     return df[col]
 
 # ============================================================
@@ -136,4 +136,4 @@ plt.close()
 
 print("✔ Plots saved in:", OUTPUT_PATH)
 
-print("\n🔥 DONE — Regression ready for paper") 
+print("\n DONE — Regression ready for paper")

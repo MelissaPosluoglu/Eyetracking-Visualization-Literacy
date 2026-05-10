@@ -21,7 +21,7 @@ def load_file(name, sep=","):
     return df
 
 # ============================================================
-# 🔥 FINAL NORMALIZE (FIXT DEIN HAUPTPROBLEM)
+# FINAL NORMALIZE (FIXT DEIN HAUPTPROBLEM)
 # ============================================================
 
 def normalize(p):
@@ -107,7 +107,7 @@ answers["Participant"] = answers["Participant"].apply(normalize)
 scores = answers.groupby("Participant")["Score"].first().reset_index()
 
 # ============================================================
-# 🔥 DEBUG (JETZT MUSS MATCHEN)
+# DEBUG
 # ============================================================
 
 print("\n=== TTFF DEBUG ===")
@@ -131,7 +131,7 @@ print("\n=== INTERSECTION ===")
 print("Common participants:", len(common))
 
 if len(common) == 0:
-    raise ValueError("❌ Immer noch kein Match → Daten prüfen!")
+    raise ValueError("Immer noch kein Match → Daten prüfen!")
 
 # ============================================================
 # FILTER + MERGE
@@ -202,4 +202,4 @@ if len(high) >= 2 and len(low) >= 2:
     else:
         print("→ No significant difference")
 else:
-    print("❌ Not enough data")
+    print("Not enough data")

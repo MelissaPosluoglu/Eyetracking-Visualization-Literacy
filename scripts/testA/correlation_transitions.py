@@ -108,7 +108,7 @@ df = all_trans.merge(scores, on="Participant")
 df = df.dropna(subset=["Transitions", "Score"])
 
 # ============================================================
-# 🔥 SPEARMAN CORRELATION
+# SPEARMAN CORRELATION
 # ============================================================
 
 corr, p = spearmanr(df["Transitions"], df["Score"])
