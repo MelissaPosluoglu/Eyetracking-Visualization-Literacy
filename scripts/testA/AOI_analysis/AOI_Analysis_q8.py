@@ -9,6 +9,7 @@ from PIL import Image
 # PATHS
 # ============================================================
 
+# Define project, data, stimulus, and output directories
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA_PATH = os.path.join(BASE_DIR, "data", "testA")
 STIM_PATH = os.path.join(DATA_PATH, "stimuli")
@@ -19,40 +20,24 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 PARTICIPANTS = ["Participant7"]
 
 # ============================================================
-# AOIs (Q8 FINAL)
+# AOIs FOR QUESTION 8
 # ============================================================
 
 def get_aois_q8():
     return [
 
-        # QUESTION
+        
         {"name": "question", "x1": 0.31, "y1": 0.03, "x2": 0.68, "y2": 0.165, "type": "relevant"},
-
-        # 🔥 Preis ~50 (bleibt gleich)
         {"name": "price_50", "x1": 0.395, "y1": 0.23, "x2": 0.414, "y2": 0.27, "type": "relevant"},
-
-        # ======================================================
-        # 🔥 CHART START KORRIGIERT
-        # ======================================================
-
-        # Januar (jetzt wirklich im Plot)
         {"name": "month_jan", "x1": 0.415, "y1": 0.17, "x2": 0.425, "y2": 0.6, "type": "relevant"},
-
-        # 🔴 Februar (perfekt aligned auf Linie)
         {"name": "month_feb", "x1": 0.427, "y1": 0.17, "x2": 0.44, "y2": 0.6, "type": "relevant"},
-
-        # März–Dezember
         {"name": "month_rest", "x1": 0.445, "y1": 0.17, "x2": 0.65, "y2": 0.6, "type": "relevant"},
-
-        # ANSWERS
         {"name": "answers", "x1": 0.28, "y1": 0.64, "x2": 0.72, "y2": 0.92, "type": "relevant"},
-
-        # BACKGROUND
         {"name": "background", "x1": 0.0, "y1": 0.0, "x2": 1.0, "y2": 1.0, "type": "irrelevant"},
     ]
 
 # ============================================================
-# HELPERS
+# HELPER FUNCTIONS
 # ============================================================
 
 def extract_question_id(event_value):
@@ -67,22 +52,26 @@ def get_fixations_for_question(df, question_label):
         (df["Event value"] == question_label)
         ]
 
+    # Skip if either URLStart or URLEnd is missing
     if len(url_events) < 2:
         return None, None
 
     t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
     t_end   = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
 
+    # Fallback for missing or unrealistic trial end times
     if pd.isna(t_end) or (t_end - t_start) > 30000:
         t_end = t_start + 25000
 
     duration = (t_end - t_start)
 
+    # Select fixation events within the trial time window
     fix = df[
         (df["Eye movement type"] == "Fixation") &
         (df["Recording timestamp"].between(t_start, t_end))
         ].copy()
 
+    # Keep only fixations with valid normalized screen coordinates
     fix = fix[
         (fix["Fixation point X (MCSnorm)"].between(0, 1)) &
         (fix["Fixation point Y (MCSnorm)"].between(0, 1))
@@ -117,7 +106,7 @@ def map_aois(fix, aois):
                 assigned = True
                 break
 
-        # 🔥 WICHTIG: fallback
+        # Fallback if no AOI matches
         if not assigned:
             aoi_names.append("background")
             aoi_types.append("irrelevant")
@@ -133,15 +122,17 @@ def map_aois(fix, aois):
 
 def compute_metrics(fix, duration):
 
+    # Sum dwell time per AOI
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
     total_dwell = dwell.sum()
 
-    # 🔥 NORMALISIERUNG (wichtig!)
+    # Normalize dwell time if total fixation duration exceeds trial duration
     if total_dwell > duration and total_dwell > 0:
         scale = duration / total_dwell
         dwell = dwell * scale
         total_dwell = dwell.sum()
 
+    # Compute relative dwell time per AOI
     dwell_ratio = {k: v / total_dwell for k, v in dwell.items()} if total_dwell > 0 else {}
 
     def ttff(target):
@@ -150,9 +141,11 @@ def compute_metrics(fix, duration):
             return np.nan
         return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0])  # ms
 
+    # Create AOI sequence and remove consecutive duplicates
     seq = fix["AOI"].tolist()
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i-1]]
 
+    # Build transition matrix from cleaned scanpath sequence
     if len(seq_clean) >= 2:
         transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
         trans_df = pd.DataFrame(transitions, columns=["from", "to"])
@@ -161,8 +154,8 @@ def compute_metrics(fix, duration):
         matrix = pd.DataFrame()
 
     transitions_count = max(len(seq_clean) - 1, 0)
-
-    # 🔥 FIX: irrelevante Zeit korrekt
+ 
+    # Background dwell ratio after normalization
     irrelevant = dwell.get("background", 0)
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
 
@@ -207,6 +200,7 @@ def plot_aoi_overlay():
 
     for aoi in aois:
 
+        # Highlight the target AOI in red
         if aoi["name"] == "month_feb":
             color = "#ff2d2d"
             lw = 0.9
@@ -231,37 +225,27 @@ def plot_aoi_overlay():
 
         plt.gca().add_patch(rect)
 
-        # ======================================================
-        # 🔥 FEINJUSTIERTE LABEL POSITIONEN
-        # ======================================================
-
-        # ======================================================
-        # 🔥 FINAL LABEL POSITIONING
-        # ======================================================
-
+        # Position labels individually to keep the overlay readable
         if aoi["name"] == "month_rest":
-            # 👉 oben links IM KASTEN
+           
             text_x = x1 + 3
             text_y = y1 + 8
             ha = "left"
             va = "top"
 
         elif aoi["name"] in ["month_jan", "price_50"]:
-            # 👉 deutlich weiter links außerhalb
             text_x = x1 - 25
             text_y = y1 + height / 2
             ha = "right"
             va = "center"
 
         elif aoi["name"] == "month_feb":
-            # 👉 UNTER dem Kasten
             text_x = x1 + width / 2
             text_y = y1 + height + 8
             ha = "center"
             va = "top"
 
         elif aoi["name"] in ["question", "answers", "background"]:
-            # 👉 links oberhalb des Kastens
             text_x = x1
             text_y = y1 - 20
             ha = "left"
@@ -291,10 +275,10 @@ def plot_aoi_overlay():
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close()
 
-    print("✔ AOI Overlay gespeichert:", save_path)
+    print("✔ AOI Overlay saved:", save_path)
 
 # ============================================================
-# MAIN
+# PARTICIPANT ANALYSIS
 # ============================================================
 
 def run_analysis(participant):
@@ -347,6 +331,7 @@ def run_analysis(participant):
 
 if __name__ == "__main__":
 
+    # Create AOI overlay for visual inspection
     plot_aoi_overlay()
 
     all_results = []
@@ -360,4 +345,4 @@ if __name__ == "__main__":
     pd.concat(all_results).to_csv(os.path.join(OUTPUT_DIR, "aoi_metrics_q8.csv"), index=False)
     pd.concat(all_matrices).to_csv(os.path.join(OUTPUT_DIR, "transition_matrix_q8.csv"), index=False)
 
-    print("\n✔ Alles fertig: CSV + AOI PNG")
+    print("\n✔ Done: CSV files and AOI PNG saved")
