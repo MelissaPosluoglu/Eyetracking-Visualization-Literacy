@@ -15,7 +15,7 @@ DATA_PATH = os.path.join(BASE_DIR, "data", "testA")
 STIM_PATH = os.path.join(DATA_PATH, "stimuli")
 RESULTS_BASE = os.path.join(BASE_DIR, "results", "testA")
 
-PARTICIPANTS = ["Participant13"]
+PARTICIPANTS = ["Participant2"]
 
 def get_output_dir(participant):
     participant_dir = os.path.join(RESULTS_BASE, participant.lower())
@@ -70,6 +70,7 @@ def extract_question_id(event_value):
 
 
 def get_fixations_for_question(df, question_label):
+
     url_events = df[
         (df["Event"].isin(["URLStart", "URLEnd"])) &
         (df["Event value"] == question_label)
@@ -81,7 +82,11 @@ def get_fixations_for_question(df, question_label):
     t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
     t_end   = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
 
-    duration = (t_end - t_start) / 1000
+    # 🔥 FALLBACK (wichtig!)
+    if pd.isna(t_end) or (t_end - t_start) > 30000:
+        t_end = t_start + 25000
+
+    duration = (t_end - t_start)  # ✅ jetzt in ms
 
     fix = df[
         (df["Eye movement type"] == "Fixation") &
@@ -134,8 +139,15 @@ def map_aois(fix, aois):
 # ============================================================
 
 def compute_metrics(fix, duration):
+
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
     total_dwell = dwell.sum()
+
+    # 🔥 FIX 1: NORMALISIERUNG (wie Q1/Q5)
+    if total_dwell > duration and total_dwell > 0:
+        scale = duration / total_dwell
+        dwell = dwell * scale
+        total_dwell = dwell.sum()
 
     dwell_ratio = {k: v / total_dwell for k, v in dwell.items()} if total_dwell > 0 else {}
 
@@ -143,7 +155,7 @@ def compute_metrics(fix, duration):
         subset = fix[fix["AOI"] == target]
         if len(subset) == 0:
             return np.nan
-        return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]) / 1000
+        return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0])  # ✅ ms
 
     seq = fix["AOI"].tolist()
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i - 1]]
@@ -155,8 +167,11 @@ def compute_metrics(fix, duration):
     else:
         matrix = pd.DataFrame()
 
-    irrelevant = fix[fix["AOI_type"] == "irrelevant"]["Gaze event duration"].sum()
+    # 🔥 FIX 2: IRRELEVANT AUS SKALIERTEM DWELL
+    irrelevant = dwell.get("background", 0)
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
+
+    transitions_count = max(len(seq_clean) - 1, 0)
 
     return {
         "TTFF_seoul": ttff("seoul"),
@@ -183,8 +198,8 @@ def compute_metrics(fix, duration):
         "Dwell_ratio_city_right": dwell_ratio.get("city_right", 0),
         "Dwell_ratio_question": dwell_ratio.get("question", 0),
 
-        "Transitions": max(len(seq_clean) - 1, 0),
-        "Transitions_per_sec": max(len(seq_clean) - 1, 0) / duration if duration > 0 else 0,
+        "Transitions": transitions_count,
+        "Transitions_per_sec": transitions_count / (duration / 1000) if duration > 0 else 0,
         "Sequence_length": len(seq_clean),
         "First_AOI": next((a for a in seq_clean if a != "background"), None),
 

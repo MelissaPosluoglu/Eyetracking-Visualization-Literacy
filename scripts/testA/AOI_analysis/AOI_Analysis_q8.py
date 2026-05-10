@@ -16,10 +16,10 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "results", "testA")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-PARTICIPANTS = ["Participant20"]
+PARTICIPANTS = ["Participant7"]
 
 # ============================================================
-# AOIs (Q8 FINAL 🔥)
+# AOIs (Q8 FINAL)
 # ============================================================
 
 def get_aois_q8():
@@ -61,6 +61,7 @@ def extract_question_id(event_value):
 
 
 def get_fixations_for_question(df, question_label):
+
     url_events = df[
         (df["Event"].isin(["URLStart", "URLEnd"])) &
         (df["Event value"] == question_label)
@@ -72,7 +73,10 @@ def get_fixations_for_question(df, question_label):
     t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
     t_end   = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
 
-    duration = (t_end - t_start) / 1000
+    if pd.isna(t_end) or (t_end - t_start) > 30000:
+        t_end = t_start + 25000
+
+    duration = (t_end - t_start)
 
     fix = df[
         (df["Eye movement type"] == "Fixation") &
@@ -104,11 +108,19 @@ def map_aois(fix, aois):
         x = row["Fixation point X (MCSnorm)"]
         y = row["Fixation point Y (MCSnorm)"]
 
+        assigned = False
+
         for aoi in aois_sorted:
             if aoi["x1"] <= x <= aoi["x2"] and aoi["y1"] <= y <= aoi["y2"]:
                 aoi_names.append(aoi["name"])
                 aoi_types.append(aoi["type"])
+                assigned = True
                 break
+
+        # 🔥 WICHTIG: fallback
+        if not assigned:
+            aoi_names.append("background")
+            aoi_types.append("irrelevant")
 
     fix["AOI"] = aoi_names
     fix["AOI_type"] = aoi_types
@@ -124,24 +136,34 @@ def compute_metrics(fix, duration):
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
     total_dwell = dwell.sum()
 
-    dwell_ratio = {k: v / total_dwell for k, v in dwell.items()}
+    # 🔥 NORMALISIERUNG (wichtig!)
+    if total_dwell > duration and total_dwell > 0:
+        scale = duration / total_dwell
+        dwell = dwell * scale
+        total_dwell = dwell.sum()
+
+    dwell_ratio = {k: v / total_dwell for k, v in dwell.items()} if total_dwell > 0 else {}
 
     def ttff(target):
         subset = fix[fix["AOI"] == target]
         if len(subset) == 0:
             return np.nan
-        return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]) / 1000
+        return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0])  # ms
 
     seq = fix["AOI"].tolist()
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i-1]]
 
-    transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
-    trans_df = pd.DataFrame(transitions, columns=["from", "to"])
-    matrix = pd.crosstab(trans_df["from"], trans_df["to"])
+    if len(seq_clean) >= 2:
+        transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
+        trans_df = pd.DataFrame(transitions, columns=["from", "to"])
+        matrix = pd.crosstab(trans_df["from"], trans_df["to"])
+    else:
+        matrix = pd.DataFrame()
 
-    transitions_per_sec = len(seq_clean) / duration if duration > 0 else 0
+    transitions_count = max(len(seq_clean) - 1, 0)
 
-    irrelevant = fix[fix["AOI_type"] == "irrelevant"]["Gaze event duration"].sum()
+    # 🔥 FIX: irrelevante Zeit korrekt
+    irrelevant = dwell.get("background", 0)
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
 
     return {
@@ -153,8 +175,8 @@ def compute_metrics(fix, duration):
 
         "Dwell_ratio_feb": dwell_ratio.get("month_feb", 0),
 
-        "Transitions": len(seq_clean),
-        "Transitions_per_sec": transitions_per_sec,
+        "Transitions": transitions_count,
+        "Transitions_per_sec": transitions_count / (duration / 1000) if duration > 0 else 0,
         "Sequence_length": len(seq_clean),
         "First_AOI": next((a for a in seq_clean if a != "background"), None),
 

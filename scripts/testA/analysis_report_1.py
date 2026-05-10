@@ -161,7 +161,7 @@ result_df["Visualization"] = result_df["Question"].str.replace(
 
 # 🔥 globaler Filter
 result_df = result_df[
-    result_df["Participant"].str.extract(r'(\d+)').astype(int)[0] <= 20
+    result_df["Participant"].str.extract(r'(\d+)').astype(int)[0] <= 28
     ]
 
 participants = result_df["Participant"].unique()

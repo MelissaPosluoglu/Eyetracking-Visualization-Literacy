@@ -1,2 +1,2 @@
 Participant,Question,TTFF_search_portal,TTFF_retail,TTFF_answers,Dwell_search,Dwell_retail,Dwell_answers,Dwell_ratio_search,Dwell_ratio_retail,Transitions,Transitions_per_sec,Sequence_length,First_AOI,Irrelevant_Ratio
-Participant13,1,0.37,,0.0,344231.0,0,229184.0,0.3182826857606752,0,35,1.4297385620915033,35,answers,0.06937882214574592
+Participant13,1,87,,1980,7677.077390645907,0,4945.130859473179,0.2843361996535521,0,40,1.4814814814814814,40,search_portal,0.17240130185248276
