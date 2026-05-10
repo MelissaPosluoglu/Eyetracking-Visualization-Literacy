@@ -10,6 +10,7 @@ from matplotlib.patches import Wedge
 # PATHS
 # ============================================================
 
+# Define project paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA_PATH = os.path.join(BASE_DIR, "data", "testA")
 STIM_PATH = os.path.join(DATA_PATH, "stimuli")
@@ -17,16 +18,19 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "results", "testA")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+# Participants included in the analysis
 PARTICIPANTS = ["Participant19"]
 
 # ============================================================
-# PIE SETTINGS
+# PIE CHART SETTINGS
 # ============================================================
 
+# Pie chart position and size in normalized screen coordinates
 CENTER_X = 0.5
 CENTER_Y = 0.44
 RADIUS = 0.127
 
+# Store pie chart segments with start and end angles
 PIE_SEGMENTS = []
 current_angle = 0
 
@@ -37,6 +41,8 @@ def add_segment(name, size):
     PIE_SEGMENTS.append({"name": name, "start": start, "end": end})
     current_angle = end
 
+
+# Define pie chart segments
 add_segment("others", 115)
 add_segment("samsung", 64)
 add_segment("xiaomi", 56)
@@ -56,7 +62,7 @@ def get_ui_aois():
     ]
 
 # ============================================================
-# HELPERS
+# HELPER FUNCTIONS
 # ============================================================
 
 def extract_question_id(event_value):
@@ -66,28 +72,32 @@ def extract_question_id(event_value):
 
 def get_fixations_for_question(df, question_label):
 
+    # Find matching start and end events for the question
     url_events = df[
         (df["Event"].isin(["URLStart", "URLEnd"])) &
         (df["Event value"] == question_label)
         ]
 
+    # Skip if start or end event is missing
     if len(url_events) < 2:
         return None, None
 
     t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
     t_end_real = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
 
-    # 🔥 stabiler fallback
+
     if pd.isna(t_end_real) or (t_end_real - t_start) > 30000:
         t_end_real = t_start + 25000
 
     duration = (t_end_real - t_start)
 
+    # Select fixation events within the question time window
     fix = df[
         (df["Eye movement type"] == "Fixation") &
         (df["Recording timestamp"].between(t_start, t_end_real))
         ].copy()
 
+    # Keep only valid normalized coordinates
     fix = fix[
         (fix["Fixation point X (MCSnorm)"].between(0, 1)) &
         (fix["Fixation point Y (MCSnorm)"].between(0, 1))
@@ -96,7 +106,7 @@ def get_fixations_for_question(df, question_label):
     return fix.sort_values("Recording timestamp").reset_index(drop=True), duration
 
 # ============================================================
-# ANGLE
+# ANGLE CALCULATION
 # ============================================================
 
 def get_angle(x, y):
@@ -124,7 +134,7 @@ def map_aois(fix):
 
         assigned = False
 
-        # PIE
+         # First check whether the fixation lies inside the pie chart
         dist = np.sqrt((x - CENTER_X)**2 + (y - CENTER_Y)**2)
 
         if dist <= RADIUS:
@@ -140,7 +150,7 @@ def map_aois(fix):
         if assigned:
             continue
 
-        # UI AOIs
+         # Then check the remaining UI AOIs
         for aoi in get_ui_aois():
             if aoi["name"] == "background":
                 continue
@@ -164,15 +174,16 @@ def map_aois(fix):
     return fix
 
 # ============================================================
-# METRICS (JETZT Q1-KOMPATIBEL)
+# METRICS
 # ============================================================
 
 def compute_metrics(fix, duration):
 
+    # Sum dwell time per AOI
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
     total_dwell = dwell.sum()
 
-    # 🔥 FIX Ratio
+    # Normalize dwell time if it exceeds the actual task duration
     if total_dwell > duration:
         scale = duration / total_dwell
         dwell = dwell * scale
@@ -186,9 +197,11 @@ def compute_metrics(fix, duration):
             return np.nan
         return subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]
 
+    # Remove consecutive duplicate AOIs from the scanpath sequence
     seq = fix["AOI"].tolist()
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i-1]]
 
+    # Build transition matrix
     transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
     trans_df = pd.DataFrame(transitions, columns=["from", "to"])
     matrix = pd.crosstab(trans_df["from"], trans_df["to"])
@@ -220,7 +233,7 @@ def compute_metrics(fix, duration):
     }
 
 # ============================================================
-# OVERLAY (UNVERÄNDERT)
+# AOI OVERLAY 
 # ============================================================
 
 def plot_aoi_overlay():
@@ -232,6 +245,7 @@ def plot_aoi_overlay():
     plt.figure(figsize=(6, 9))
     plt.imshow(img)
 
+    # Draw pie chart segment boundaries
     for seg in PIE_SEGMENTS:
         start = (seg["start"] - 90) % 360
         end = (seg["end"] - 90) % 360
@@ -248,6 +262,7 @@ def plot_aoi_overlay():
         )
         plt.gca().add_patch(wedge)
 
+    # Draw UI AOI rectangles
     for aoi in get_ui_aois():
         rect = plt.Rectangle(
             (aoi["x1"] * w, aoi["y1"] * h),
@@ -266,7 +281,7 @@ def plot_aoi_overlay():
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close()
 
-    print("✔ AOI Overlay mit Labels gespeichert:", save_path)
+    print("✔ AOI Overlay with pie and UI AOIs saved:", save_path)
 
 # ============================================================
 # ANALYSIS
@@ -321,11 +336,13 @@ def run_analysis(participant):
 
 if __name__ == "__main__":
 
+    # Create AOI overlay for visual inspection
     plot_aoi_overlay()
 
     all_results = []
     all_matrices = []
 
+    # Run analysis for all participants
     for p in PARTICIPANTS:
         df_res, df_mat = run_analysis(p)
 
@@ -347,4 +364,4 @@ if __name__ == "__main__":
             index=False
         )
 
-    print("\n✔ FINAL: PIE AOI Analyse komplett & korrekt")
+    print("\n✔ FINAL: PIE AOI analysis completed successfully")

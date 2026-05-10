@@ -9,6 +9,7 @@ from PIL import Image
 # PATHS
 # ============================================================
 
+# Define input data, stimulus image, and output directories
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA_PATH = os.path.join(BASE_DIR, "data", "testA")
 STIM_PATH = os.path.join(DATA_PATH, "stimuli")
@@ -16,6 +17,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "results", "testA")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+# List of participants to analyze
 PARTICIPANTS = ["Participant19"]
 
 # ============================================================
@@ -35,7 +37,7 @@ def get_aois_q1():
     ]
 
 # ============================================================
-# HELPERS
+# HELPER FUNCTIONS
 # ============================================================
 
 def extract_question_id(event_value):
@@ -45,19 +47,20 @@ def extract_question_id(event_value):
 
 def get_fixations_for_question(df, question_label):
 
+    # Find all URLStart events that match the current question label
     url_events = df[
         (df["Event"] == "URLStart") &
         (df["Event value"] == question_label)
         ]
 
+    # If no URLStart event exists for this question, skip it
     if len(url_events) == 0:
         return None, None
 
-    # 🔥 ROBUSTER START
     t_start_raw = url_events["Recording timestamp"].min()
 
-    BUFFER_BEFORE = 2000   # 2 Sekunden vorher
-    MAX_DURATION = 25000   # 25 Sekunden
+    BUFFER_BEFORE = 2000   
+    MAX_DURATION = 25000   
 
     t_start = t_start_raw - BUFFER_BEFORE
     t_end_real = t_start_raw + MAX_DURATION
@@ -74,10 +77,10 @@ def get_fixations_for_question(df, question_label):
         (fix["Fixation point Y (MCSnorm)"].between(0, 1))
         ]
 
-    # 🔥 WICHTIG: falls KEINE Fixationen → skippen
     if len(fix) == 0:
         return None, None
 
+    # Sort fixations chronologically
     return fix.sort_values("Recording timestamp").reset_index(drop=True), duration
 
 # ============================================================
@@ -122,19 +125,21 @@ def map_aois(fix, aois):
 
 def compute_metrics(fix, duration):
 
-    # 🔥 Falls leer → nichts berechnen
+    # Do not compute metrics if fixation data is missing or empty
     if fix is None or len(fix) == 0:
         return None
 
+    # Sum fixation durations for each AOI
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
     total_dwell = dwell.sum()
 
-    # 🔥 Normalize nur wenn sinnvoll
+    # If total dwell time exceeds the task duration, scale it down
     if total_dwell > 0 and total_dwell > duration:
         scale = duration / total_dwell
         dwell = dwell * scale
         total_dwell = dwell.sum()
 
+    # Compute relative dwell time per AOI
     dwell_ratio = {k: v / total_dwell for k, v in dwell.items()} if total_dwell > 0 else {}
 
     def ttff(target):
@@ -143,15 +148,18 @@ def compute_metrics(fix, duration):
             return np.nan
         return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0])
 
+    # Create a raw AOI sequence
     seq = fix["AOI"].tolist()
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i-1]]
 
+    # Create AOI transition pairs
     transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
     trans_df = pd.DataFrame(transitions, columns=["from", "to"])
     matrix = pd.crosstab(trans_df["from"], trans_df["to"]) if len(trans_df) > 0 else pd.DataFrame()
 
     transitions_per_sec = len(seq_clean) / (duration / 1000) if duration > 0 else 0
 
+    # Compute dwell time spent on the background AOI
     irrelevant = dwell.get("background", 0)
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
 
@@ -177,9 +185,12 @@ def compute_metrics(fix, duration):
         "Transition_Matrix": matrix
     }
 
+
+
 # ============================================================
-# REST BLEIBT UNVERÄNDERT
+# AOI OVERLAY PLOT
 # ============================================================
+
 
 def plot_aoi_overlay():
     img_path = os.path.join(STIM_PATH, "Question1.png")
@@ -188,14 +199,17 @@ def plot_aoi_overlay():
         print("Stimulus fehlt:", img_path)
         return
 
+    # Load stimulus image
     img = Image.open(img_path)
     w, h = img.size
 
+    # Load AOI definitions for Question 1
     aois = get_aois_q1()
 
     plt.figure(figsize=(6, 9))
     plt.imshow(img)
-
+ 
+    # Draw every AOI as a rectangle on top of the stimulus image
     for aoi in aois:
         x1 = aoi["x1"] * w
         y1 = aoi["y1"] * h
@@ -215,22 +229,30 @@ def plot_aoi_overlay():
 
     plt.axis("off")
 
+    # Save AOI overlay image
     save_path = os.path.join(OUTPUT_DIR, "aoi_overlay_q1.png")
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close()
 
     print("✔ AOI PNG gespeichert:", save_path)
 
+# ============================================================
+# PARTICIPANT ANALYSIS
+# ============================================================
+
 def run_analysis(participant):
 
+     # Load participant eye-tracking data
     file_path = os.path.join(DATA_PATH, f"{participant}.tsv")
     df = pd.read_csv(file_path, sep="\t", low_memory=False)
 
+    # Extract all unique question labels from URLStart events
     question_labels = df[df["Event"] == "URLStart"]["Event value"].dropna().unique()
 
     results = []
     matrices = []
 
+    # Loop through all question labels found in the data
     for q_label in question_labels:
 
         qid = extract_question_id(q_label)
@@ -265,6 +287,7 @@ def run_analysis(participant):
         row.update(metrics)
         results.append(row)
 
+    # Return empty dataframes if no valid results were computed
     if len(results) == 0:
         return pd.DataFrame(), pd.DataFrame()
 
@@ -276,6 +299,7 @@ def run_analysis(participant):
 
 if __name__ == "__main__":
 
+    # Create AOI overlay image for visual checking
     plot_aoi_overlay()
 
     all_results = []
@@ -289,4 +313,4 @@ if __name__ == "__main__":
     pd.concat(all_results).to_csv(os.path.join(OUTPUT_DIR, "aoi_metrics_q1.csv"), index=False)
     pd.concat(all_matrices).to_csv(os.path.join(OUTPUT_DIR, "transition_matrix_q1.csv"), index=False)
 
-    print("\n✔ Alles fertig: CSV + AOI PNG")
+    print("\n✔ Analysis complete: CSV + AOI PNG")

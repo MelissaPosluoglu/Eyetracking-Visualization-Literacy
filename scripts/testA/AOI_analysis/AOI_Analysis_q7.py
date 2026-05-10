@@ -9,12 +9,13 @@ from PIL import Image
 # PATHS
 # ============================================================
 
-
+# Define project, data, stimulus, and results directories
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA_PATH = os.path.join(BASE_DIR, "data", "testA")
 STIM_PATH = os.path.join(DATA_PATH, "stimuli")
 RESULTS_BASE = os.path.join(BASE_DIR, "results", "testA")
 
+# Participants included in the analysis
 PARTICIPANTS = ["Participant2"]
 
 def get_output_dir(participant):
@@ -23,30 +24,16 @@ def get_output_dir(participant):
     os.makedirs(output_dir, exist_ok=True)
     return output_dir
 # ============================================================
-# AOIs (Q7 FINAL - STACKED BAR)
+# AOIs FOR QUESTION 7: STACKED BAR CHART
 # ============================================================
 
 def get_aois_q7():
     return [
         {"name": "question",        "x1": 0.27,  "y1": 0.01,  "x2": 0.7,  "y2": 0.165,  "type": "relevant"},
-
-        # gesamter Diagrammbereich
-        #{"name": "chart",           "x1": 0.35,  "y1": 0.18,  "x2": 0.58,  "y2": 0.60,  "type": "relevant"},
-
-        # y-Achse links vom Plot
         {"name": "y_axis", "x1": 0.37, "y1": 0.18, "x2": 0.4, "y2": 0.6,"type": "relevant"},
-
-
-
         {"name": "city_right",      "x1": 0.456, "y1": 0.18,  "x2": 0.58, "y2": 0.6,  "type": "relevant"},
         {"name": "city_left",       "x1": 0.4, "y1": 0.18,  "x2": 0.430, "y2": 0.6,  "type": "relevant"},
         {"name": "seoul",           "x1": 0.432, "y1": 0.18,  "x2": 0.455, "y2": 0.6,  "type": "relevant"},
-        #{"name": "peanut",          "x1": 0.430, "y1":0.28,  "x2": 0.455, "y2": 0.38,  "type": "relevant"},
-
-
-
-
-        # Legende rechts neben dem Chart
         {"name": "legend",          "x1": 0.585,  "y1": 0.2,  "x2": 0.65,  "y2": 0.35,  "type": "relevant"},
 
         {
@@ -61,7 +48,7 @@ def get_aois_q7():
         {"name": "background",      "x1": 0.0,   "y1": 0.0,   "x2": 1.0,   "y2": 1.0,   "type": "irrelevant"},
     ]
 # ============================================================
-# HELPERS
+# HELPER FUNCTIONS 
 # ============================================================
 
 def extract_question_id(event_value):
@@ -76,17 +63,18 @@ def get_fixations_for_question(df, question_label):
         (df["Event value"] == question_label)
         ]
 
+    # Skip if either URLStart or URLEnd is missing
     if len(url_events) < 2:
         return None, None
 
     t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
     t_end   = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
 
-    # 🔥 FALLBACK (wichtig!)
+    # Fallback for missing or unrealistically long trial durations
     if pd.isna(t_end) or (t_end - t_start) > 30000:
         t_end = t_start + 25000
 
-    duration = (t_end - t_start)  # ✅ jetzt in ms
+    duration = (t_end - t_start) 
 
     fix = df[
         (df["Eye movement type"] == "Fixation") &
@@ -105,6 +93,7 @@ def get_fixations_for_question(df, question_label):
 # ============================================================
 
 def map_aois(fix, aois):
+    
     aois_sorted = sorted(
         aois,
         key=lambda a: (a["name"] == "background", (a["x2"] - a["x1"]) * (a["y2"] - a["y1"]))
@@ -125,6 +114,7 @@ def map_aois(fix, aois):
                 assigned = True
                 break
 
+        # Fallback if no AOI matches
         if not assigned:
             aoi_names.append("background")
             aoi_types.append("irrelevant")
@@ -140,15 +130,17 @@ def map_aois(fix, aois):
 
 def compute_metrics(fix, duration):
 
+    # Sum dwell time per AOI
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
     total_dwell = dwell.sum()
 
-    # 🔥 FIX 1: NORMALISIERUNG (wie Q1/Q5)
+    # Normalize dwell time if total fixation duration exceeds trial duration
     if total_dwell > duration and total_dwell > 0:
         scale = duration / total_dwell
         dwell = dwell * scale
         total_dwell = dwell.sum()
 
+    # Compute relative dwell time per AOI
     dwell_ratio = {k: v / total_dwell for k, v in dwell.items()} if total_dwell > 0 else {}
 
     def ttff(target):
@@ -157,9 +149,11 @@ def compute_metrics(fix, duration):
             return np.nan
         return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0])  # ✅ ms
 
+    # Create AOI sequence and remove consecutive duplicates
     seq = fix["AOI"].tolist()
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i - 1]]
 
+    # Build transition matrix from cleaned scanpath sequence
     if len(seq_clean) >= 2:
         transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
         trans_df = pd.DataFrame(transitions, columns=["from", "to"])
@@ -167,7 +161,7 @@ def compute_metrics(fix, duration):
     else:
         matrix = pd.DataFrame()
 
-    # 🔥 FIX 2: IRRELEVANT AUS SKALIERTEM DWELL
+    # Background dwell ratio after normalization
     irrelevant = dwell.get("background", 0)
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
 
@@ -228,8 +222,9 @@ def plot_aoi_overlay(output_dir):
 
     for aoi in aois:
 
+        # Highlight the target AOI in red
         if aoi["name"] == "seoul":
-            color = "#ff2d2d"   # rot highlight wie month_feb
+            color = "#ff2d2d"   
             lw = 0.9
         else:
             color = "#1f4aff" if aoi["type"] == "relevant" else "#999999"
@@ -326,7 +321,7 @@ def plot_aoi_overlay(output_dir):
 
     print("✔ AOI PNG gespeichert:", save_path)
 # ============================================================
-# MAIN
+# PARTICIPANT ANALYSIS
 # ============================================================
 
 def run_analysis(participant):
@@ -392,6 +387,7 @@ if __name__ == "__main__":
     all_results = []
     all_matrices = []
 
+    # Run AOI analysis and overlay creation for all participants
     for p in PARTICIPANTS:
         output_dir = get_output_dir(p)
         plot_aoi_overlay(output_dir)
@@ -402,4 +398,4 @@ if __name__ == "__main__":
         if not df_mat.empty:
             all_matrices.append(df_mat)
 
-    print("\n✔ Alles fertig: AOI PNG + CSVs in jeweiligem participant/AOI/q7_stackedbar")
+    print("\n✔  Done: AOI PNG and CSV files saved in each participant/AOI/q7_stackedbar folder")
