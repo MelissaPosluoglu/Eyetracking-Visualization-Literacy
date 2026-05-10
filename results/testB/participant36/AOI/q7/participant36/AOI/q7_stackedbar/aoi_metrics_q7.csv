@@ -1,0 +1,2 @@
+Participant,Question,TTFF_seoul,TTFF_y_axis,TTFF_legend,TTFF_answers,TTFF_city_left,TTFF_city_right,TTFF_question,Dwell_seoul,Dwell_y_axis,Dwell_legend,Dwell_answers,Dwell_city_left,Dwell_city_right,Dwell_question,Dwell_ratio_seoul,Dwell_ratio_y_axis,Dwell_ratio_legend,Dwell_ratio_answers,Dwell_ratio_city_left,Dwell_ratio_city_right,Dwell_ratio_question,Transitions,Transitions_per_sec,Sequence_length,First_AOI,Irrelevant_Ratio
+Participant36,7,,,,0.0,,,,0,0,0,326517.0,0,0,0,0,0,0,1.0,0,0,0,0,0.0,1,answers,0.0
