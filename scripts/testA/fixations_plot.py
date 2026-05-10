@@ -5,18 +5,16 @@ import matplotlib
 import os
 import numpy as np
 
-# DAS IST FÜR PARTICIPANT 1 BIS 20
-
-# ----------------------------------------------------
-# Non-interactive backend
-# ----------------------------------------------------
+# ============================================================
+# NON-INTERACTIVE BACKEND
+# ============================================================
 matplotlib.use("Agg")
 
-# ----------------------------------------------------
-# Configuration
-# ----------------------------------------------------
-PARTICIPANT = "Participant27"
-QUESTION_ID = 7
+# ============================================================
+# CONFIG
+# ============================================================
+PARTICIPANT = "Participant20"
+QUESTION_ID = 1
 
 DATA_FILE = os.path.join("..", "..", "data", "testA", f"{PARTICIPANT}.tsv")
 IMAGE_PATH = os.path.join("..", "..", "data", "testA", "stimuli", f"Question{QUESTION_ID}.png")
@@ -24,26 +22,65 @@ OUTPUT_DIR = os.path.join("..", "..", "results", "testA", PARTICIPANT.lower(), "
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# ----------------------------------------------------
-# Load TSV
-# ----------------------------------------------------
+MIN_FIX_DURATION = 80
+MAX_FIX_DURATION = 1000
+TOP_TEXT_THRESHOLD = 0.28
+
+TOP_TEXT_SHIFTS = {
+    "Participant1": 0.04,
+    "Participant4": -0.02,
+    "Participant5": -0.04,
+    "Participant8": -0.06,
+    "Participant10": 0.00,
+    "Participant12": -0.08,
+    "Participant13": -0.04,
+    "Participant14": -0.10,
+    "Participant15": -0.07,
+    "Participant16": 0.03,
+    "Participant20": -0.05,
+    "Participant21": 0.00,
+}
+
+# ============================================================
+# SAME SHIFT LOGIC AS SCANPATH
+# ============================================================
+def apply_top_text_shift(fix_df, participant):
+    fix_df = fix_df.copy()
+
+    fix_df["X_shifted"] = fix_df["Fixation point X (MCSnorm)"].copy()
+    fix_df["Y_shifted"] = fix_df["Fixation point Y (MCSnorm)"].copy()
+
+    top_text_y_shift = TOP_TEXT_SHIFTS.get(participant, 0.00)
+
+    mask_top = fix_df["Y_shifted"] < TOP_TEXT_THRESHOLD
+    fix_df.loc[mask_top, "Y_shifted"] = (
+            fix_df.loc[mask_top, "Y_shifted"] + top_text_y_shift
+    )
+
+    fix_df["X_shifted"] = fix_df["X_shifted"].clip(0, 1)
+    fix_df["Y_shifted"] = fix_df["Y_shifted"].clip(0, 1)
+
+    return fix_df
+
+# ============================================================
+# LOAD TSV
+# ============================================================
 df = pd.read_csv(DATA_FILE, sep="\t", low_memory=False)
 
-# ----------------------------------------------------
-# Detect question time window
-# ----------------------------------------------------
+# ============================================================
+# DETECT QUESTION TIME WINDOW
+# ============================================================
 events = df[
     (df["Event"] == "URLStart") &
-    (df["Event value"].str.contains("Question", na=False))
+    (df["Event value"].astype(str).str.contains("Question", na=False))
     ].sort_values("Recording timestamp")
 
 current_event = events[
-    events["Event value"].str.contains(f"Question {QUESTION_ID}", na=False)
+    events["Event value"].astype(str).str.contains(f"Question {QUESTION_ID}", na=False)
 ]
 
 if current_event.empty:
-    print(f"⚠️ Question {QUESTION_ID} not found")
-    exit()
+    raise RuntimeError(f"Question {QUESTION_ID} not found")
 
 start_time = current_event["Recording timestamp"].iloc[0]
 
@@ -54,49 +91,57 @@ if not next_events.empty:
 else:
     end_time = df["Recording timestamp"].max()
 
-# ----------------------------------------------------
-# Extract + CLEAN fixations
-# ----------------------------------------------------
+# ============================================================
+# EXTRACT + CLEAN FIXATIONS
+# ============================================================
 fix = df[
     (df["Eye movement type"] == "Fixation") &
     (df["Recording timestamp"] >= start_time) &
     (df["Recording timestamp"] < end_time)
     ].copy()
 
-# Duration filter (same as analysis!)
+if "Eye movement type index" in fix.columns:
+    fix = fix.drop_duplicates(subset="Eye movement type index")
+
 fix = fix[
-    (fix["Gaze event duration"] >= 80) &
-    (fix["Gaze event duration"] <= 1000)
+    (fix["Gaze event duration"] >= MIN_FIX_DURATION) &
+    (fix["Gaze event duration"] <= MAX_FIX_DURATION)
     ]
 
-# Remove duplicates
-fix = fix.drop_duplicates(subset="Eye movement type index")
+fix = fix[
+    (fix["Fixation point X (MCSnorm)"].between(0, 1)) &
+    (fix["Fixation point Y (MCSnorm)"].between(0, 1))
+    ].copy()
 
 print(f"Clean Fixations for Question {QUESTION_ID}: {len(fix)}")
 
 if fix.empty:
-    print("⚠️ No valid fixations after cleaning")
-    exit()
+    raise RuntimeError("No valid fixations after cleaning")
 
-# ----------------------------------------------------
-# Load stimulus image
-# ----------------------------------------------------
+# ============================================================
+# LOAD IMAGE
+# ============================================================
 img = Image.open(IMAGE_PATH)
 w, h = img.size
 
-fix["X_px"] = fix["Fixation point X (MCSnorm)"] * w
-fix["Y_px"] = fix["Fixation point Y (MCSnorm)"] * h
+# ============================================================
+# APPLY SAME SHIFT LOGIC AS SCANPATH
+# ============================================================
+fix = apply_top_text_shift(fix, PARTICIPANT)
 
-# ----------------------------------------------------
-# Scale fixation size by duration
-# ----------------------------------------------------
+fix["X_px"] = fix["X_shifted"] * w
+fix["Y_px"] = fix["Y_shifted"] * h
+
+# ============================================================
+# SCALE FIXATION SIZE BY DURATION
+# ============================================================
 dur = fix["Gaze event duration"].to_numpy()
 dur_scaled = np.clip(dur, 80, 600)
 size = dur_scaled / 6
 
-# ----------------------------------------------------
-# Plot
-# ----------------------------------------------------
+# ============================================================
+# PLOT
+# ============================================================
 dpi = 100
 fig_w = w / dpi
 fig_h = h / dpi
@@ -109,25 +154,24 @@ ax.axis("off")
 ax.scatter(
     fix["X_px"],
     fix["Y_px"],
-    s=size * 1.5,           # etwas größer
-    color="#cc0000",        # kräftiges rot
-    edgecolors="black",     # schwarzer rand für kontrast
+    s=size * 1.5,
+    color="#cc0000",
+    edgecolors="black",
     linewidth=0.6,
-    alpha=0.9               # weniger transparent
+    alpha=0.9
 )
-
 
 plt.tight_layout()
 
-# ----------------------------------------------------
-# Save
-# ----------------------------------------------------
+# ============================================================
+# SAVE
+# ============================================================
 out_path = os.path.join(
     OUTPUT_DIR,
-    f"{PARTICIPANT}_Question{QUESTION_ID}_FIXATIONS_CLEAN.png"
+    f"{PARTICIPANT}_Question{QUESTION_ID}_FIXATIONS_CLEAN_SHIFTED.png"
 )
 
 plt.savefig(out_path, dpi=300, bbox_inches="tight")
 plt.close()
 
-print("✅ Clean fixation plot saved.")
+print("✅ Clean fixation plot with same shift logic as scanpath saved.")

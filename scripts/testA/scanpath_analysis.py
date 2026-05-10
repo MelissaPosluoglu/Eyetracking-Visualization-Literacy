@@ -9,17 +9,37 @@ from PIL import Image
 # SETTINGS
 # ============================================================
 
-PARTICIPANT = "Participant4"
-QUESTION_ID = 7
+PARTICIPANT = "Participant14"
+QUESTION_ID = 11
 
 ANALYSIS_MIN_NORM = 0.002
 
 MIN_FIX_DURATION = 80
-MAX_FIXATIONS = 80
+MAX_FIX_DURATION = 1000
+MAX_FIXATIONS_FOR_PLOT = 80
 
 LINEWIDTH = 1.6
 LINE_ALPHA = 0.9
 FIX_SIZE = 10
+
+# ============================================================
+# OPTIONAL OFFSET (NUR FÜR PLOT)
+# ============================================================
+
+TOP_TEXT_SHIFTS = {
+    "Participant1": 0.04,
+    "Participant4": -0.02,
+    "Participant5": -0.04,
+    "Participant8": -0.06,
+    "Participant10": 0.00,
+    "Participant12": -0.03,
+    "Participant13": -0.04,
+    "Participant14": -0.1,
+    "Participant15": -0.07,
+    "Participant16": 0.03,
+    "Participant20": -0.05,
+    "Participant21": 0.00,
+}
 
 # ============================================================
 # PATHS
@@ -42,31 +62,31 @@ def get_output_dir(participant, question_id):
     }
 
 # ============================================================
-# 🔥 FINAL FIXATION REDUCTION (WISSENSCHAFTLICH SAUBER)
+# FIXATION PROCESSING
 # ============================================================
 
-def reduce_fixations(fix):
+def prepare_fixations(fix):
+    fix = fix.copy()
 
-    # 1. 🔥 ECHTE FIXATIONEN (wie in PDF!)
     if "Eye movement type index" in fix.columns:
         fix = fix.drop_duplicates(subset="Eye movement type index")
 
-    # 2. Dauerfilter (identisch zur Hauptanalyse)
     if "Gaze event duration" in fix.columns:
         fix = fix[
             (fix["Gaze event duration"] >= MIN_FIX_DURATION) &
-            (fix["Gaze event duration"] <= 1000)
+            (fix["Gaze event duration"] <= MAX_FIX_DURATION)
             ]
 
-    # 3. Sortieren (WICHTIG für Scanpath!)
     fix = fix.sort_values("Recording timestamp")
 
-    # 4. 🔥 SMART SAMPLING (gleichmäßige Auswahl statt skip)
-    if len(fix) > MAX_FIXATIONS:
-        indices = np.linspace(0, len(fix) - 1, MAX_FIXATIONS).astype(int)
-        fix = fix.iloc[indices]
-
     return fix.reset_index(drop=True)
+
+
+def reduce_for_plot(fix):
+    if len(fix) > MAX_FIXATIONS_FOR_PLOT:
+        indices = np.linspace(0, len(fix) - 1, MAX_FIXATIONS_FOR_PLOT).astype(int)
+        return fix.iloc[indices].reset_index(drop=True)
+    return fix
 
 # ============================================================
 # HELPERS
@@ -97,7 +117,7 @@ def get_fixations_for_question(df, question_label):
         (fix["Fixation point Y (MCSnorm)"].between(0, 1))
         ]
 
-    fix = reduce_fixations(fix)
+    fix = prepare_fixations(fix)
 
     if len(fix) < 2:
         return None, None
@@ -139,25 +159,39 @@ def compute_metrics(fix):
 # PLOT
 # ============================================================
 
-def save_scanpath_plot(participant, df, qid, qlabel, plot_path):
+def save_scanpath_plot(participant, fix_analysis, qid, plot_path):
 
     img_path = os.path.join(STIM_PATH, f"Question{qid}.png")
     if not os.path.exists(img_path):
         print("Stimulus fehlt")
         return None
 
-    fix, _ = get_fixations_for_question(df, qlabel)
-    if fix is None:
-        return None
+    fix_plot = reduce_for_plot(fix_analysis)
 
     img = Image.open(img_path)
     w, h = img.size
 
-    fix = fix.copy()
-    fix["X_px"] = fix["Fixation point X (MCSnorm)"] * w
-    fix["Y_px"] = fix["Fixation point Y (MCSnorm)"] * h
 
-    n = len(fix)
+    fix_plot = fix_plot.copy()
+
+    fix_plot["X_shifted"] = fix_plot["Fixation point X (MCSnorm)"].copy()
+    fix_plot["Y_shifted"] = fix_plot["Fixation point Y (MCSnorm)"].copy()
+
+    TOP_TEXT_THRESHOLD = 0.28
+    top_text_y_shift = TOP_TEXT_SHIFTS.get(participant, 0.00)
+
+    mask_top = fix_plot["Y_shifted"] < TOP_TEXT_THRESHOLD
+    fix_plot.loc[mask_top, "Y_shifted"] = (
+            fix_plot.loc[mask_top, "Y_shifted"] + top_text_y_shift
+    )
+
+    fix_plot["X_shifted"] = fix_plot["X_shifted"].clip(0, 1)
+    fix_plot["Y_shifted"] = fix_plot["Y_shifted"].clip(0, 1)
+
+    fix_plot["X_px"] = fix_plot["X_shifted"] * w
+    fix_plot["Y_px"] = fix_plot["Y_shifted"] * h
+
+    n = len(fix_plot)
     cmap = plt.cm.plasma
 
     plt.figure(figsize=(6, 9))
@@ -165,11 +199,11 @@ def save_scanpath_plot(participant, df, qid, qlabel, plot_path):
 
     for i in range(n - 1):
 
-        x1, y1 = fix.loc[i, ["X_px", "Y_px"]]
-        x2, y2 = fix.loc[i + 1, ["X_px", "Y_px"]]
+        x1, y1 = fix_plot.loc[i, ["X_px", "Y_px"]]
+        x2, y2 = fix_plot.loc[i + 1, ["X_px", "Y_px"]]
 
-        dx = fix.loc[i + 1, "Fixation point X (MCSnorm)"] - fix.loc[i, "Fixation point X (MCSnorm)"]
-        dy = fix.loc[i + 1, "Fixation point Y (MCSnorm)"] - fix.loc[i, "Fixation point Y (MCSnorm)"]
+        dx = fix_plot.loc[i + 1, "X_shifted"] - fix_plot.loc[i, "X_shifted"]
+        dy = fix_plot.loc[i + 1, "Y_shifted"] - fix_plot.loc[i, "Y_shifted"]
 
         dist = math.sqrt(dx*dx + dy*dy)
         if dist < ANALYSIS_MIN_NORM:
@@ -181,16 +215,16 @@ def save_scanpath_plot(participant, df, qid, qlabel, plot_path):
                  alpha=LINE_ALPHA)
 
     plt.scatter(
-        fix["X_px"],
-        fix["Y_px"],
+        fix_plot["X_px"],
+        fix_plot["Y_px"],
         c=np.linspace(0, 1, n),
         cmap="plasma",
         s=FIX_SIZE,
         alpha=0.9
     )
 
-    plt.scatter(fix.loc[0, "X_px"], fix.loc[0, "Y_px"], s=80, marker="o")
-    plt.scatter(fix.loc[n-1, "X_px"], fix.loc[n-1, "Y_px"], s=80, marker="X")
+    plt.scatter(fix_plot.loc[0, "X_px"], fix_plot.loc[0, "Y_px"], s=80)
+    plt.scatter(fix_plot.loc[n-1, "X_px"], fix_plot.loc[n-1, "Y_px"], s=80, marker="X")
 
     plt.title(f"{participant} – Time-coded Scanpath (Q{qid})")
     plt.axis("off")
@@ -199,7 +233,7 @@ def save_scanpath_plot(participant, df, qid, qlabel, plot_path):
     plt.savefig(plot_path, dpi=300)
     plt.close()
 
-    return plot_path
+    return fix_plot
 
 # ============================================================
 # MAIN
@@ -243,10 +277,10 @@ result = pd.DataFrame([{
 print(result)
 
 # speichern
-save_scanpath_plot(PARTICIPANT, df, QUESTION_ID, q_label, paths["plot"])
+fix_plot = save_scanpath_plot(PARTICIPANT, fix, QUESTION_ID, paths["plot"])
 result.to_csv(paths["csv"], index=False)
 
-# 🔥 MINIMAL & SINNVOLL
+# EIN CSV wie vorher
 fix_export = fix[[
     "Recording timestamp",
     "Fixation point X (MCSnorm)",

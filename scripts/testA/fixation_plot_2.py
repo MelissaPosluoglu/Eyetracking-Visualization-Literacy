@@ -5,7 +5,6 @@ import matplotlib
 import os
 import numpy as np
 
-
 # DAS IST FÜR PARTICIPANT 20-30
 
 # ----------------------------------------------------
@@ -16,14 +15,53 @@ matplotlib.use("Agg")
 # ----------------------------------------------------
 # Configuration
 # ----------------------------------------------------
-PARTICIPANT = ("Participant24")
-QUESTION_ID = 7
+PARTICIPANT = "Participant22"
+QUESTION_ID = 1
 
 DATA_FILE = os.path.join("..", "..", "data", "testA", f"{PARTICIPANT}.tsv")
 IMAGE_PATH = os.path.join("..", "..", "data", "testA", "stimuli", f"Question{QUESTION_ID}.png")
 OUTPUT_DIR = os.path.join("..", "..", "results", "testA", PARTICIPANT.lower(), "fixations")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+MIN_FIX_DURATION = 80
+MAX_FIX_DURATION = 1000
+TOP_TEXT_THRESHOLD = 0.28
+
+TOP_TEXT_SHIFTS = {
+    "Participant20": -0.05,
+    "Participant21": 0.00,
+    "Participant22":-0.03,
+    "Participant23": 0.00,
+    "Participant24": 0.00,
+    "Participant25": 0.00,
+    "Participant26": 0.00,
+    "Participant27": 0.00,
+    "Participant28": 0.00,
+    "Participant29": 0.00,
+    "Participant30": 0.00,
+}
+
+# ----------------------------------------------------
+# Same shift logic as scanpath
+# ----------------------------------------------------
+def apply_top_text_shift(fix_df, participant):
+    fix_df = fix_df.copy()
+
+    fix_df["X_shifted"] = fix_df["Fixation point X [MCS norm]"].copy()
+    fix_df["Y_shifted"] = fix_df["Fixation point Y [MCS norm]"].copy()
+
+    top_text_y_shift = TOP_TEXT_SHIFTS.get(participant, 0.00)
+
+    mask_top = fix_df["Y_shifted"] < TOP_TEXT_THRESHOLD
+    fix_df.loc[mask_top, "Y_shifted"] = (
+            fix_df.loc[mask_top, "Y_shifted"] + top_text_y_shift
+    )
+
+    fix_df["X_shifted"] = fix_df["X_shifted"].clip(0, 1)
+    fix_df["Y_shifted"] = fix_df["Y_shifted"].clip(0, 1)
+
+    return fix_df
 
 # ----------------------------------------------------
 # Load TSV
@@ -44,7 +82,7 @@ current_event = events[
 
 if current_event.empty:
     print(f"⚠️ Question {QUESTION_ID} not found")
-    exit()
+    raise SystemExit
 
 start_time = current_event["Recording timestamp [ms]"].iloc[0]
 
@@ -66,18 +104,25 @@ fix = df[
 
 # Duration filter
 fix = fix[
-    (fix["Gaze event duration [ms]"] >= 80) &
-    (fix["Gaze event duration [ms]"] <= 1000)
+    (fix["Gaze event duration [ms]"] >= MIN_FIX_DURATION) &
+    (fix["Gaze event duration [ms]"] <= MAX_FIX_DURATION)
     ]
 
 # Remove duplicates
-fix = fix.drop_duplicates(subset="Eye movement type index")
+if "Eye movement type index" in fix.columns:
+    fix = fix.drop_duplicates(subset="Eye movement type index")
+
+# Nur gültige normierte Punkte behalten
+fix = fix[
+    (fix["Fixation point X [MCS norm]"].between(0, 1)) &
+    (fix["Fixation point Y [MCS norm]"].between(0, 1))
+    ].copy()
 
 print(f"Clean Fixations for Question {QUESTION_ID}: {len(fix)}")
 
 if fix.empty:
     print("⚠️ No valid fixations after cleaning")
-    exit()
+    raise SystemExit
 
 # ----------------------------------------------------
 # Load stimulus image
@@ -85,8 +130,13 @@ if fix.empty:
 img = Image.open(IMAGE_PATH)
 w, h = img.size
 
-fix["X_px"] = fix["Fixation point X [MCS norm]"] * w
-fix["Y_px"] = fix["Fixation point Y [MCS norm]"] * h
+# ----------------------------------------------------
+# Apply same shift logic as scanpath
+# ----------------------------------------------------
+fix = apply_top_text_shift(fix, PARTICIPANT)
+
+fix["X_px"] = fix["X_shifted"] * w
+fix["Y_px"] = fix["Y_shifted"] * h
 
 # ----------------------------------------------------
 # Scale fixation size by duration
@@ -124,11 +174,11 @@ plt.tight_layout()
 # ----------------------------------------------------
 out_path = os.path.join(
     OUTPUT_DIR,
-    f"{PARTICIPANT}_Question{QUESTION_ID}_FIXATIONS_CLEAN.png"
+    f"{PARTICIPANT}_Question{QUESTION_ID}_FIXATIONS_CLEAN_SHIFTED.png"
 )
 
 plt.savefig(out_path, dpi=300, bbox_inches="tight")
 plt.close()
 
-print("✅ Clean fixation plot saved.")
+print("✅ Clean fixation plot with shifted top-text region saved.")
 print("📁 Saved to:", out_path)
