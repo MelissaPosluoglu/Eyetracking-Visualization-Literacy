@@ -1,0 +1,2 @@
+Participant,Question,TTFF_samsung,TTFF_answers,Dwell_samsung,Dwell_answers,Dwell_ratio_samsung,Dwell_ratio_answers,Transitions,Transitions_per_sec,Sequence_length,First_AOI,Irrelevant_Ratio
+Participant62,5,5000,4650,1008.2861402177309,4628.215846402081,0.058326264835872686,0.2677281105109089,29,1.6775611731358826,29,question,0.1099767855662345
