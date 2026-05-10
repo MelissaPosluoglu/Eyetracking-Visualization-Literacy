@@ -44,7 +44,7 @@ for i, rating in enumerate(sorted(likert_df.index)):
 
 plt.xlabel("Percentage")
 plt.gca().xaxis.set_major_formatter(lambda x, _: f"{int(x*100)}%")
-plt.title("Cognitive Load – Likert Distribution")
+plt.title("NASA-TLX – Likert Distribution")
 plt.legend(title="Rating (1–5)", bbox_to_anchor=(1.05,1))
 plt.tight_layout()
 
