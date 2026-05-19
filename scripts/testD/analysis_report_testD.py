@@ -16,6 +16,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 DATA_PATH = os.path.join(BASE_DIR, "data", "testD")
 RESULTS_PATH = os.path.join(BASE_DIR, "results", "testD", "fixation_reports")
 
+# Create result folder if needed
 os.makedirs(RESULTS_PATH, exist_ok=True)
 
 files = glob.glob(os.path.join(DATA_PATH, "*.tsv"))
@@ -24,27 +25,33 @@ scores_df = pd.read_csv(os.path.join(DATA_PATH, "scores.csv"))
 answers_df = pd.read_csv(os.path.join(DATA_PATH, "answers.csv"))
 
 # ---------------------------------------------------
-# KONSTANTEN
+# CONSTANTS
 # ---------------------------------------------------
 
+# Standard column names used after renaming
 TIMESTAMP = "Recording timestamp [ms]"
 DURATION = "Gaze event duration [ms]"
 INDEX = "Eye movement type index"
 
+# Store all calculated fixation results
 all_results = []
 
 print("Found participants:", len(files))
 
 # ---------------------------------------------------
-# HELFER
+# HELPER
 # ---------------------------------------------------
 
 def find_column(columns, candidates):
+    # Find a column name even if the exact spelling differs
     for cand in candidates:
         cand_lower = cand.lower().strip()
+        # First check exact matches
         for c in columns:
             if cand_lower == c.lower().strip():
                 return c
+
+        # Then check partial matches
         for c in columns:
             if cand_lower in c.lower().strip():
                 return c
@@ -55,11 +62,16 @@ def find_column(columns, candidates):
 # ---------------------------------------------------
 
 for file in files:
+    # Extract participant name from file name
     participant_name = os.path.basename(file).replace(".tsv", "")
+
+    # Load participant eye-tracking data
     df = pd.read_csv(file, sep="\t", low_memory=False)
 
+    # Remove extra spaces from column names
     df.columns = df.columns.str.strip()
 
+    # Find required columns automatically
     timestamp_col = find_column(df.columns, [
         "Recording timestamp [ms]",
         "Recording timestamp"
@@ -78,11 +90,13 @@ for file in files:
     event_value_col = find_column(df.columns, ["Event value"])
     movement_col = find_column(df.columns, ["Eye movement type"])
 
+    # Skip participant if important columns are missing
     if not all([timestamp_col, duration_col, index_col, event_col, event_value_col, movement_col]):
         print(f"Fehlende Spalten in {participant_name}")
         print("Columns:", list(df.columns))
         continue
 
+    # Rename columns to standard names
     df = df.rename(columns={
         timestamp_col: TIMESTAMP,
         duration_col: DURATION,
@@ -92,17 +106,22 @@ for file in files:
         movement_col: "Eye movement type"
     })
 
+    # Remove duplicated columns
     df = df.loc[:, ~df.columns.duplicated()].copy()
 
+    # Convert important columns to numeric values
     df[TIMESTAMP] = pd.to_numeric(df[TIMESTAMP], errors="coerce")
     df[DURATION] = pd.to_numeric(df[DURATION], errors="coerce")
     df[INDEX] = pd.to_numeric(df[INDEX], errors="coerce")
 
+    # Remove rows without valid timestamps
     df = df.dropna(subset=[TIMESTAMP])
 
     # -------------------------------
     # Question Events
     # -------------------------------
+
+    # Select all question start events
     question_events = df[
         (df["Event"] == "URLStart") &
         (df["Event value"].astype(str).str.contains("Question", na=False))
@@ -112,17 +131,21 @@ for file in files:
         print(f"Keine Question-Events in {participant_name}")
         continue
 
+    # Sort question events by time
     question_events = question_events.sort_values(TIMESTAMP)
 
     # -------------------------------
-    # Fixationen
+    # Fixation Data
     # -------------------------------
+
+    # Keep only fixation rows
     fix = df[df["Eye movement type"] == "Fixation"].copy()
 
     if fix.empty:
         print(f"Keine Fixations in {participant_name}")
         continue
 
+    # Keep only fixations with positive duration
     fix = fix[pd.to_numeric(fix[DURATION], errors="coerce") > 0].copy()
 
     if fix.empty:
@@ -137,7 +160,7 @@ for file in files:
         continue
 
     # -------------------------------
-    # Segmentierung
+    # SEGMENT FIXATIONS BY QUESTION
     # -------------------------------
     for i in range(len(question_events)):
         start_time = question_events.iloc[i][TIMESTAMP]
@@ -175,9 +198,10 @@ for file in files:
         ])
 
 # ---------------------------------------------------
-# DATAFRAME
+# CREATE RESULT DATAFRAME
 # ---------------------------------------------------
 
+# Convert collected results into a dataframe
 result_df = pd.DataFrame(all_results, columns=[
     "Participant",
     "Question",
@@ -186,9 +210,11 @@ result_df = pd.DataFrame(all_results, columns=[
     "Total_Dwell_ms"
 ])
 
+# Stop if no data was processed
 if result_df.empty:
     raise ValueError("Keine Daten verarbeitet. Prüfe, ob die Test-D TSV-Dateien die erwarteten Event- und Fixation-Spalten enthalten.")
 
+# Extract visualization name from question label
 result_df["Visualization"] = result_df["Question"].str.replace(
     r"Question \d+ – ", "", regex=True
 )
@@ -208,9 +234,10 @@ participants = result_df["Participant"].unique()
 print("Participants im Report:", participants)
 
 # ---------------------------------------------------
-# PDF ERSTELLEN
+# CREATE PDF REPORT
 # ---------------------------------------------------
 
+# Define output PDF path
 pdf_file = os.path.join(RESULTS_PATH, "All_Participants_Report_testD.pdf")
 doc = SimpleDocTemplate(pdf_file, pagesize=A4)
 elements = []
@@ -259,6 +286,11 @@ for p in participants:
     elements.append(table)
     elements.append(Spacer(1, 0.3 * inch))
 
+    # -------------------------------
+    # ANSWER CORRECTNESS TABLE
+    # -------------------------------
+
+    # Create answer table header
     answer_table_data = [["Question", "Seconds", "Correct"]]
 
     for _, row in participant_answers.iterrows():

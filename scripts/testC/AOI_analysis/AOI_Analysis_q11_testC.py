@@ -9,6 +9,7 @@ from PIL import Image
 # PATHS
 # ============================================================
 
+# Define project, data, stimulus, and output directories
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA_PATH = os.path.join(BASE_DIR, "data", "testC")
 STIM_PATH = os.path.join(DATA_PATH, "stimuli")
@@ -16,6 +17,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "results", "testC")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+# Participants included in the analysis
 PARTICIPANTS = ["Participant51"]
 
 # ============================================================
@@ -65,6 +67,7 @@ def get_fixations_for_question(df, question_label):
         (df["Event value"] == question_label)
         ]
 
+    # Skip if no relevant timing event is available
     if len(url_events) < 1:
         return None, None
 
@@ -113,6 +116,7 @@ def map_aois(fix, aois):
                 assigned = True
                 break
 
+        # Fallback if no AOI matches
         if not assigned:
             names.append("background")
             types.append("irrelevant")
@@ -127,11 +131,21 @@ def map_aois(fix, aois):
 # ============================================================
 
 def compute_metrics(fix, duration):
+
+    """
+    Compute AOI-based eye-tracking metrics for Question 11.
+
+    The duration is expected to be in milliseconds.
+    """
+
+    # Sum dwell time per AOI
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
     total_dwell = dwell.sum()
 
+    # Compute irrelevant dwell time before scaling
     irrelevant = fix[fix["AOI_type"] == "irrelevant"]["Gaze event duration"].sum()
 
+    # Normalize dwell time if total fixation duration exceeds trial duration
     if total_dwell > duration and duration > 0:
         scale = duration / total_dwell
         dwell = dwell * scale
@@ -149,9 +163,11 @@ def compute_metrics(fix, duration):
             return np.nan
         return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]) / 1000
 
+    # Create AOI sequence and remove consecutive duplicates
     seq = fix["AOI"].tolist()
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i - 1]]
 
+    # Build transition matrix from cleaned scanpath sequence
     if len(seq_clean) >= 2:
         transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
         trans_df = pd.DataFrame(transitions, columns=["from", "to"])
@@ -161,6 +177,8 @@ def compute_metrics(fix, duration):
 
     transitions_count = max(len(seq_clean) - 1, 0)
     transitions_per_sec = transitions_count / (duration / 1000) if duration > 0 else 0
+
+    # Background dwell ratio after normalization
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
 
     return {
@@ -203,6 +221,7 @@ def plot_aoi_overlay():
     plt.imshow(img)
 
     for aoi in aois:
+        # Highlight the target AOI in red
         color = "#ff2d2d" if aoi["name"] == "year_2012" else ("#1f4aff" if aoi["type"] == "relevant" else "#999999")
 
         x1 = aoi["x1"] * w

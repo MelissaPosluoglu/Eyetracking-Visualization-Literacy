@@ -12,6 +12,7 @@ from PIL import Image
 PARTICIPANT = "Participant61"
 QUESTION_ID = 11
 
+# Minimum normalized movement distance used to filter very small saccades
 ANALYSIS_MIN_NORM = 0.002
 
 MIN_FIX_DURATION = 80
@@ -22,9 +23,13 @@ LINEWIDTH = 1.6
 LINE_ALPHA = 0.9
 FIX_SIZE = 10
 
+
 # ============================================================
-# TOP TEXT SHIFT (NUR FÜR PLOT)
+# OPTIONAL PLOT OFFSET
 # ============================================================
+
+# Participant-specific vertical shifts for the top text area.
+# This correction is applied only for plotting, not for metric computation.
 
 TOP_TEXT_SHIFTS = {
     "Participant61": 0.00,
@@ -40,11 +45,15 @@ TOP_TEXT_THRESHOLD = 0.28
 # PATHS
 # ============================================================
 
+# Define project, data, stimulus, and output paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_PATH = os.path.join(BASE_DIR, "data", "testD")
 STIM_PATH = os.path.join(DATA_PATH, "stimuli")
 
 def get_output_dir(participant, question_id):
+    """
+    Create and return all output paths for one participant and question.
+    """
     participant_dir = os.path.join(BASE_DIR, "results", "testD", participant.lower())
     output_dir = os.path.join(participant_dir, "scanpath", f"q{question_id}")
     os.makedirs(output_dir, exist_ok=True)
@@ -61,6 +70,11 @@ def get_output_dir(participant, question_id):
 # ============================================================
 
 def reduce_fixations(fix):
+
+    """
+  Clean fixation data by removing duplicates, filtering fixation duration,
+  and sorting fixations chronologically.
+  """
     fix = fix.copy()
 
     if "Eye movement type index" in fix.columns:
@@ -78,6 +92,11 @@ def reduce_fixations(fix):
 
 
 def reduce_for_plot(fix):
+    """
+   Reduce the number of plotted fixations for readability.
+
+   The full fixation sequence is still used for metric computation.
+   """
     fix = fix.copy()
 
     if len(fix) > MAX_FIXATIONS:
@@ -91,6 +110,9 @@ def reduce_for_plot(fix):
 # ============================================================
 
 def get_fixations_for_question(df, question_label):
+    """
+    Extract valid fixations for one question using the URLStart and URLEnd events.
+    """
     url_events = df[
         (df["Event"].isin(["URLStart", "URLEnd"])) &
         (df["Event value"] == question_label)
@@ -126,6 +148,16 @@ def get_fixations_for_question(df, question_label):
 # ============================================================
 
 def compute_metrics(fix):
+    """
+  Compute scanpath-based metrics from consecutive fixation movements.
+
+  Metrics include:
+  - Scanpath length
+  - Vertical movement ratio
+  - Regression rate
+  - Directional entropy
+  """
+
     dx = np.diff(fix["Fixation point X [MCS norm]"].to_numpy())
     dy = np.diff(fix["Fixation point Y [MCS norm]"].to_numpy())
 
@@ -158,6 +190,13 @@ def compute_metrics(fix):
 # ============================================================
 
 def save_scanpath_plot(participant, fix_analysis, qid, plot_path):
+
+    """
+     Create and save a time-coded scanpath plot on top of the stimulus image.
+
+     The optional participant-specific top-text shift is applied only here.
+     """
+
     img_path = os.path.join(STIM_PATH, f"Question{qid}.png")
     if not os.path.exists(img_path):
         print("Stimulus fehlt")
@@ -212,6 +251,7 @@ def save_scanpath_plot(participant, fix_analysis, qid, plot_path):
             alpha=LINE_ALPHA
         )
 
+    # Plot fixation points using the same time-coded color scale
     plt.scatter(
         fix_plot["X_px"],
         fix_plot["Y_px"],
@@ -220,7 +260,7 @@ def save_scanpath_plot(participant, fix_analysis, qid, plot_path):
         s=FIX_SIZE,
         alpha=0.9
     )
-
+    # Mark first and last fixation
     plt.scatter(fix_plot.loc[0, "X_px"], fix_plot.loc[0, "Y_px"], s=80, marker="o")
     plt.scatter(fix_plot.loc[n - 1, "X_px"], fix_plot.loc[n - 1, "Y_px"], s=80, marker="X")
 
@@ -237,11 +277,14 @@ def save_scanpath_plot(participant, fix_analysis, qid, plot_path):
 # MAIN
 # ============================================================
 
+# Create output paths
 paths = get_output_dir(PARTICIPANT, QUESTION_ID)
 
+# Load participant data
 file_path = os.path.join(DATA_PATH, f"{PARTICIPANT}.tsv")
 df = pd.read_csv(file_path, sep="\t", low_memory=False)
 
+# Find the selected question
 question_rows = df[
     (df["Event"] == "URLStart") &
     (df["Event value"].astype(str).str.contains(f"Question {QUESTION_ID}", na=False))
@@ -257,12 +300,15 @@ fix, duration = get_fixations_for_question(df, q_label)
 if fix is None:
     raise RuntimeError("Keine Fixationen")
 
+
+# Compute scanpath metrics
 metrics = compute_metrics(fix)
 if metrics is None:
     raise RuntimeError("Keine gueltigen Sakkaden")
 
 distances, vr, rr, ent = metrics
 
+# Create summary dataframe
 result = pd.DataFrame([{
     "Participant": PARTICIPANT,
     "Question_ID": QUESTION_ID,
@@ -280,6 +326,7 @@ print(result)
 save_scanpath_plot(PARTICIPANT, fix, QUESTION_ID, paths["plot"])
 result.to_csv(paths["csv"], index=False)
 
+# Save fixation coordinates in the same simple format as before
 fix_export = fix[[
     "Recording timestamp [ms]",
     "Fixation point X [MCS norm]",

@@ -18,6 +18,7 @@ RESULTS_BASE = os.path.join(BASE_DIR, "results", "testB","Participant41","AOI","
 PARTICIPANTS = ["Participant41"]
 
 def get_output_dir(participant):
+    # Create participant-specific output folder
     participant_dir = os.path.join(RESULTS_BASE, participant.lower())
     output_dir = os.path.join(participant_dir, "AOI", "q7_stackedbar")
     os.makedirs(output_dir, exist_ok=True)
@@ -27,28 +28,29 @@ def get_output_dir(participant):
 # ============================================================
 
 def get_aois_q7():
+    # AOI coordinates are normalized between 0 and 1
     return [
         {"name": "question",        "x1": 0.27,  "y1": 0.01,  "x2": 0.7,  "y2": 0.165,  "type": "relevant"},
 
-        # gesamter Diagrammbereich
+
         #{"name": "chart",           "x1": 0.35,  "y1": 0.18,  "x2": 0.58,  "y2": 0.60,  "type": "relevant"},
 
-        # y-Achse links vom Plot
+        # Left y-axis area
         {"name": "y_axis", "x1": 0.37, "y1": 0.18, "x2": 0.4, "y2": 0.6,"type": "relevant"},
 
 
-
+        # Main chart areas
         {"name": "city_right",      "x1": 0.456, "y1": 0.18,  "x2": 0.58, "y2": 0.6,  "type": "relevant"},
         {"name": "city_left",       "x1": 0.4, "y1": 0.18,  "x2": 0.430, "y2": 0.6,  "type": "relevant"},
         {"name": "seoul",           "x1": 0.432, "y1": 0.18,  "x2": 0.455, "y2": 0.6,  "type": "relevant"},
         #{"name": "peanut",          "x1": 0.430, "y1":0.28,  "x2": 0.455, "y2": 0.38,  "type": "relevant"},
 
 
-
-
-        # Legende rechts neben dem Chart
+        # Legend area
         {"name": "legend",          "x1": 0.585,  "y1": 0.2,  "x2": 0.65,  "y2": 0.35,  "type": "relevant"},
 
+
+        # Answer options
         {
             "name": "answers",
             "x1": 0.314,
@@ -65,11 +67,13 @@ def get_aois_q7():
 # ============================================================
 
 def extract_question_id(event_value):
+    # Extract question number from event label
     m = re.search(r"Question\s+(\d+)", str(event_value))
     return int(m.group(1)) if m else None
 
 
 def get_fixations_for_question(df, question_label):
+    # Get URL start and end events for the selected question
     url_events = df[
         (df["Event"].isin(["URLStart", "URLEnd"])) &
         (df["Event value"] == question_label)
@@ -78,21 +82,26 @@ def get_fixations_for_question(df, question_label):
     if len(url_events) < 2:
         return None, None
 
+    # Define time window of the question
     t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp [ms]"].min()
     t_end   = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp [ms]"].max()
 
+    # Convert duration to seconds
     duration = (t_end - t_start) / 1000
 
+    # Select fixation data within the question time window
     fix = df[
         (df["Eye movement type"] == "Fixation") &
         (df["Recording timestamp [ms]"].between(t_start, t_end))
         ].copy()
 
+    # Keep only valid normalized coordinates
     fix = fix[
         (fix["Fixation point X [MCS norm]"].between(0, 1)) &
         (fix["Fixation point Y [MCS norm]"].between(0, 1))
         ]
 
+    # Sort fixations by time
     return fix.sort_values("Recording timestamp [ms]").reset_index(drop=True), duration
 
 # ============================================================
@@ -100,6 +109,7 @@ def get_fixations_for_question(df, question_label):
 # ============================================================
 
 def map_aois(fix, aois):
+    # Check specific AOIs before the background AOI
     aois_sorted = sorted(
         aois,
         key=lambda a: (a["name"] == "background", (a["x2"] - a["x1"]) * (a["y2"] - a["y1"]))
@@ -108,6 +118,7 @@ def map_aois(fix, aois):
     aoi_names = []
     aoi_types = []
 
+    # Assign each fixation to an AOI
     for _, row in fix.iterrows():
         x = row["Fixation point X [MCS norm]"]
         y = row["Fixation point Y [MCS norm]"]
@@ -124,6 +135,8 @@ def map_aois(fix, aois):
             aoi_names.append("background")
             aoi_types.append("irrelevant")
 
+
+    # Add AOI information to fixation dataframe
     fix["AOI"] = aoi_names
     fix["AOI_type"] = aoi_types
 
@@ -134,19 +147,28 @@ def map_aois(fix, aois):
 # ============================================================
 
 def compute_metrics(fix, duration):
+    # Sum dwell time per AOI
     dwell = fix.groupby("AOI")["Gaze event duration [ms]"].sum()
     total_dwell = dwell.sum()
 
+    # Calculate dwell ratios
     dwell_ratio = {k: v / total_dwell for k, v in dwell.items()} if total_dwell > 0 else {}
 
     def ttff(target):
+        # Time to first fixation for one AOI
         subset = fix[fix["AOI"] == target]
         if len(subset) == 0:
             return np.nan
         return (subset["Recording timestamp [ms]"].iloc[0] - fix["Recording timestamp [ms]"].iloc[0]) / 1000
 
+    # Create AOI sequence
     seq = fix["AOI"].tolist()
+
+    # Remove consecutive duplicates
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i - 1]]
+
+
+# Build transition matrix
 
     if len(seq_clean) >= 2:
         transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
@@ -155,6 +177,8 @@ def compute_metrics(fix, duration):
     else:
         matrix = pd.DataFrame()
 
+
+# Calculate irrelevant dwell ratio
     irrelevant = fix[fix["AOI_type"] == "irrelevant"]["Gaze event duration [ms]"].sum()
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
 
@@ -197,6 +221,7 @@ def compute_metrics(fix, duration):
 # ============================================================
 def plot_aoi_overlay(output_dir):
 
+    # Load stimulus image
     img_path = os.path.join(STIM_PATH, "Question7.png")
 
     if not os.path.exists(img_path):
@@ -211,20 +236,22 @@ def plot_aoi_overlay(output_dir):
     plt.figure(figsize=(6, 9))
     plt.imshow(img)
 
+    # Draw AOI rectangles
     for aoi in aois:
-
+        # Highlight Seoul AOI
         if aoi["name"] == "seoul":
             color = "#ff2d2d"   # rot highlight wie month_feb
             lw = 0.9
         else:
             color = "#1f4aff" if aoi["type"] == "relevant" else "#999999"
             lw = 0.9
-
+        # Convert normalized coordinates to pixels
         x1 = aoi["x1"] * w
         y1 = aoi["y1"] * h
         width = (aoi["x2"] - aoi["x1"]) * w
         height = (aoi["y2"] - aoi["y1"]) * h
 
+        # Draw rectangle
         rect = plt.Rectangle(
             (x1, y1),
             width,
@@ -237,7 +264,7 @@ def plot_aoi_overlay(output_dir):
 
         plt.gca().add_patch(rect)
 
-        # Labels
+        # Set label position
         if aoi["name"] == "question":
             tx = x1 + 6
             ty = y1 + 12
@@ -320,6 +347,7 @@ def run_analysis(participant):
     file_path = os.path.join(DATA_PATH, f"{participant}.tsv")
     df = pd.read_csv(file_path, sep="\t", low_memory=False)
 
+    # Get all question labels
     question_labels = df[df["Event"] == "URLStart"]["Event value"].dropna().unique()
 
     results = []
@@ -330,13 +358,16 @@ def run_analysis(participant):
         if qid != 7:
             continue
 
+        # Extract fixations for this question
         fix, duration = get_fixations_for_question(df, q_label)
         if fix is None:
             continue
 
+        # Map fixations to AOIs
         aois = get_aois_q7()
         fix = map_aois(fix, aois)
 
+        # Print debug information
         print("\n==============================")
         print(f"AOI Counts für {participant}")
         print(fix["AOI"].value_counts())
@@ -345,8 +376,12 @@ def run_analysis(participant):
         print(fix.groupby("AOI")["Gaze event duration [ms]"].sum())
         print("==============================\n")
 
+
+        # Calculate metrics
         metrics = compute_metrics(fix, duration)
 
+
+        # Store transition matrix separately
         matrix = metrics.pop("Transition_Matrix")
         if not matrix.empty:
             matrix["Participant"] = participant
@@ -357,11 +392,16 @@ def run_analysis(participant):
         row.update(metrics)
         results.append(row)
 
+    # Create result dataframes
     results_df = pd.DataFrame(results)
     matrices_df = pd.concat(matrices) if len(matrices) > 0 else pd.DataFrame()
 
+
+    # Save metric results
     results_df.to_csv(os.path.join(output_dir, "aoi_metrics_q7.csv"), index=False)
 
+
+    # Save transition matrix
     if not matrices_df.empty:
         matrices_df.to_csv(os.path.join(output_dir, "transition_matrix_q7.csv"), index=False)
     else:

@@ -9,6 +9,7 @@ from PIL import Image
 # PATHS
 # ============================================================
 
+# Define project, data, stimulus, and output directories
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA_PATH = os.path.join(BASE_DIR, "data", "testC")
 STIM_PATH = os.path.join(DATA_PATH, "stimuli")
@@ -54,6 +55,7 @@ def extract_question_id(event_value):
 
 def get_fixations_for_question(df, question_label):
 
+    # Detect timestamp, coordinate, and duration column names automatically
     if "Recording timestamp" in df.columns:
         ts_col = "Recording timestamp"
         x_col = "Fixation point X (MCSnorm)"
@@ -65,17 +67,20 @@ def get_fixations_for_question(df, question_label):
         y_col = "Fixation point Y [MCS norm]"
         dur_col = "Gaze event duration [ms]"
 
+    # Select URLStart and URLEnd events for the current question
     url_events = df[
         (df["Event"].isin(["URLStart", "URLEnd"])) &
         (df["Event value"] == question_label)
         ]
 
+    # Skip if start or end event is missing
     if len(url_events) < 2:
         return None, None
 
     t_start = url_events[url_events["Event"] == "URLStart"][ts_col].min()
     t_end = url_events[url_events["Event"] == "URLEnd"][ts_col].max()
 
+    # Trial duration in seconds
     duration = (t_end - t_start) / 1000
 
     fix = df[
@@ -113,6 +118,7 @@ def map_aois(fix):
         x = row["Fixation point X"]
         y = row["Fixation point Y"]
 
+        # First check whether the fixation lies inside the scatter plot grid
         if PLOT["x1"] <= x <= PLOT["x2"] and PLOT["y1"] <= y <= PLOT["y2"]:
 
             col = int((x - PLOT["x1"]) / dx)
@@ -125,6 +131,7 @@ def map_aois(fix):
             types.append("relevant")
             continue
 
+        # Then check UI AOIs
         assigned = False
         for aoi in get_ui_aois():
             if aoi["name"] == "background":
@@ -162,6 +169,7 @@ def compute_metrics(fix, duration):
             return np.nan
         return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]) / 1000
 
+    # Create AOI sequence and remove consecutive duplicates
     seq = fix["AOI"].tolist()
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i - 1]]
 
@@ -198,14 +206,17 @@ def plot_aoi_overlay(participant):
     dx = (x2 - x1) / GRID_COLS
     dy = (y2 - y1) / GRID_ROWS
 
+    # Draw vertical grid lines
     for i in range(GRID_COLS + 1):
         x = (x1 + i * dx) * w
         plt.plot([x, x], [y1 * h, y2 * h], linestyle=(0, (4, 4)), color="#1f4aff")
 
+    # Draw horizontal grid lines
     for j in range(GRID_ROWS + 1):
         y = (y1 + j * dy) * h
         plt.plot([x1 * w, x2 * w], [y, y], linestyle=(0, (4, 4)), color="#1f4aff")
 
+    # Draw UI AOI rectangles
     for aoi in get_ui_aois():
         rect = plt.Rectangle(
             (aoi["x1"] * w, aoi["y1"] * h),

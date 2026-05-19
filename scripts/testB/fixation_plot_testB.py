@@ -62,7 +62,7 @@ current_event = events[
 ]
 
 if current_event.empty:
-    print(f"⚠️ Question {QUESTION_ID} not found")
+    print(f" Question {QUESTION_ID} not found")
     exit()
 
 start_time = current_event["Recording timestamp [ms]"].iloc[0]

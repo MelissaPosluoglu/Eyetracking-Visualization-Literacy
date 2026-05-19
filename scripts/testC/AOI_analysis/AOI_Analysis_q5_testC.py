@@ -20,23 +20,27 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 PARTICIPANTS = ["Participant51"]
 
 # ============================================================
-# PIE CHART SETTINGS
+#  PIE SETTINGS
 # ============================================================
-
+# Normalized center position of the pie chart
 CENTER_X = 0.5
 CENTER_Y = 0.44
+
+# Normalized radius of the pie chart
 RADIUS = 0.127
 
 PIE_SEGMENTS = []
 current_angle = 0
 
 def add_segment(name, size):
+    # Add one pie segment with start and end angle
     global current_angle
     start = current_angle
     end = current_angle + size
     PIE_SEGMENTS.append({"name": name, "start": start, "end": end})
     current_angle = end
 
+# Define pie chart segments
 add_segment("others", 115)
 add_segment("samsung", 64)
 add_segment("xiaomi", 56)
@@ -49,6 +53,7 @@ add_segment("vivo", 33)
 # ============================================================
 
 def get_ui_aois():
+    # Define non-pie AOIs such as question and answers
     return [
         {"name": "question", "x1": 0.26, "y1": 0.03, "x2": 0.74, "y2": 0.20, "type": "relevant"},
         {"name": "answers",  "x1": 0.28, "y1": 0.67, "x2": 0.72, "y2": 0.95, "type": "relevant"},
@@ -79,10 +84,12 @@ def normalize_columns(df):
     return df
 
 def extract_question_id(event_value):
+    # Extract question number from event label
     m = re.search(r"Question\s+(\d+)", str(event_value))
     return int(m.group(1)) if m else None
 
 def get_fixations_for_question(df, question_label):
+    # Get start and end events for the selected question
 
     url_events = df[
         (df["Event"].isin(["URLStart", "URLEnd"])) &
@@ -92,6 +99,7 @@ def get_fixations_for_question(df, question_label):
     if len(url_events) < 2:
         return None, None
 
+    # Define question time window
     t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
     t_end_real = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
 
@@ -100,16 +108,19 @@ def get_fixations_for_question(df, question_label):
 
     duration = (t_end_real - t_start)
 
+    # Select fixations within this time window
     fix = df[
         (df["Eye movement type"] == "Fixation") &
         (df["Recording timestamp"].between(t_start, t_end_real))
         ].copy()
 
+    # Keep only valid normalized fixation coordinates
     fix = fix[
         (fix["Fixation point X (MCSnorm)"].between(0, 1)) &
         (fix["Fixation point Y (MCSnorm)"].between(0, 1))
         ]
 
+    # Sort fixations by time
     return fix.sort_values("Recording timestamp").reset_index(drop=True), duration
 
 # ============================================================
@@ -117,9 +128,11 @@ def get_fixations_for_question(df, question_label):
 # ============================================================
 
 def get_angle(x, y):
+    # Calculate distance from pie center
     dx = x - CENTER_X
     dy = CENTER_Y - y
 
+    # Convert position to angle
     angle = np.degrees(np.arctan2(dy, dx))
     if angle < 0:
         angle += 360
@@ -132,6 +145,7 @@ def get_angle(x, y):
 
 def map_aois(fix):
 
+    # Store assigned AOI names and types
     names, types = [], []
 
     for _, row in fix.iterrows():
@@ -141,11 +155,14 @@ def map_aois(fix):
 
         assigned = False
 
+        # Calculate distance from fixation to pie center
         dist = np.sqrt((x - CENTER_X) ** 2 + (y - CENTER_Y) ** 2)
 
+        # Check whether fixation lies inside the pie chart
         if dist <= RADIUS:
             angle = get_angle(x, y)
 
+            # Assign fixation to matching pie segment
             for seg in PIE_SEGMENTS:
                 if seg["start"] <= angle < seg["end"]:
                     names.append(seg["name"])
@@ -156,10 +173,12 @@ def map_aois(fix):
         if assigned:
             continue
 
+            # Background is handled at the end
         for aoi in get_ui_aois():
             if aoi["name"] == "background":
                 continue
 
+            # Check whether fixation lies inside this AOI
             if aoi["x1"] <= x <= aoi["x2"] and aoi["y1"] <= y <= aoi["y2"]:
                 names.append(aoi["name"])
                 types.append(aoi["type"])
@@ -168,10 +187,11 @@ def map_aois(fix):
 
         if assigned:
             continue
-
+        # 3. BACKGROUND
         names.append("background")
         types.append("irrelevant")
 
+    # Add AOI information to fixation dataframe
     fix["AOI"] = names
     fix["AOI_type"] = types
 
@@ -183,6 +203,7 @@ def map_aois(fix):
 
 def compute_metrics(fix, duration):
 
+    # Sum dwell time per AOI
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
     total_dwell = dwell.sum()
 
@@ -194,20 +215,27 @@ def compute_metrics(fix, duration):
     dwell_ratio = {k: v / total_dwell for k, v in dwell.items()} if total_dwell > 0 else {}
 
     def ttff(target):
+
+        # Calculate time to first fixation for one AOI
         subset = fix[fix["AOI"] == target]
         if len(subset) == 0:
             return np.nan
         return subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]
 
+    # Create AOI sequence
     seq = fix["AOI"].tolist()
+
+    # Remove consecutive duplicates
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i - 1]]
 
+    # Build transition matrix
     transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
     trans_df = pd.DataFrame(transitions, columns=["from", "to"])
     matrix = pd.crosstab(trans_df["from"], trans_df["to"]) if len(trans_df) > 0 else pd.DataFrame()
 
     transitions_per_sec = len(seq_clean) / (duration / 1000) if duration > 0 else 0
 
+    # Calculate irrelevant dwell ratio
     irrelevant = dwell.get("background", 0)
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
 
@@ -245,9 +273,12 @@ def plot_aoi_overlay():
     plt.imshow(img)
 
     for seg in PIE_SEGMENTS:
+
+        # Convert stored angles for matplotlib wedge
         start = (seg["start"] - 90) % 360
         end = (seg["end"] - 90) % 360
 
+        # Draw pie segment outline
         wedge = Wedge(
             (CENTER_X * w, CENTER_Y * h),
             RADIUS * w,
@@ -297,6 +328,7 @@ def run_analysis(participant):
 
     for q_label in question_labels:
 
+        # Analyze only Question 5
         qid = extract_question_id(q_label)
         if qid != 5:
             continue
@@ -307,6 +339,7 @@ def run_analysis(participant):
 
         fix = map_aois(fix)
 
+        # Print debug information
         print("\n==============================")
         print("AOI Counts fuer", participant)
         print(fix["AOI"].value_counts())
@@ -317,16 +350,20 @@ def run_analysis(participant):
 
         metrics = compute_metrics(fix, duration)
 
+        # Store transition matrix separately
         matrix = metrics.pop("Transition_Matrix")
         if not matrix.empty:
             matrix["Participant"] = participant
             matrix["Question"] = qid
             matrices.append(matrix)
 
+        # Store metric row
         row = {"Participant": participant, "Question": qid}
         row.update(metrics)
         results.append(row)
 
+
+    # Return results and matrices
     return pd.DataFrame(results), pd.concat(matrices) if len(matrices) > 0 else None
 
 # ============================================================

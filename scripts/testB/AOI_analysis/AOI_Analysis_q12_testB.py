@@ -19,8 +19,10 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 PARTICIPANTS = ["Participant41"]
 
 # ============================================================
-# SCATTER SETTINGS
+# SCATTER PLOT SETTINGS
 # ============================================================
+
+# Normalized plot area of the scatter plot
 
 PLOT = {
     "x1": 0.38,
@@ -28,15 +30,16 @@ PLOT = {
     "y1": 0.285,
     "y2": 0.69
 }
-
+# Number of grid cells
 GRID_COLS = 4
 GRID_ROWS = 4
 
 # ============================================================
-# UI AOIs
+# UI AOI DEFINITIONS
 # ============================================================
 
 def get_ui_aois():
+    # Define non-grid AOIs
     return [
         {"name": "question", "x1": 0.27, "y1": 0.02, "x2": 0.73, "y2": 0.17, "type": "relevant"},
         {"name": "answers",  "x1": 0.32, "y1": 0.74, "x2": 0.68, "y2": 0.96, "type": "relevant"},
@@ -48,13 +51,14 @@ def get_ui_aois():
 # ============================================================
 
 def extract_question_id(event_value):
+    # Extract question number from event label
     m = re.search(r"(\d+)", str(event_value))
     return int(m.group(1)) if m else None
 
 
 def get_fixations_for_question(df, question_label):
 
-    # 🔥 automatisch richtiges Format erkennen
+    # Detect column format automatically
     if "Recording timestamp" in df.columns:
         ts_col = "Recording timestamp"
         x_col = "Fixation point X (MCSnorm)"
@@ -66,6 +70,7 @@ def get_fixations_for_question(df, question_label):
         y_col = "Fixation point Y [MCS norm]"
         dur_col = "Gaze event duration [ms]"
 
+    # Get URL start and end events for this question
     url_events = df[
         (df["Event"].isin(["URLStart", "URLEnd"])) &
         (df["Event value"] == question_label)
@@ -74,29 +79,33 @@ def get_fixations_for_question(df, question_label):
     if len(url_events) < 2:
         return None, None
 
+    # Define question time window
     t_start = url_events[url_events["Event"] == "URLStart"][ts_col].min()
     t_end   = url_events[url_events["Event"] == "URLEnd"][ts_col].max()
 
+    # Convert duration to seconds
     duration = (t_end - t_start) / 1000
 
+    # Select fixations inside the time window
     fix = df[
         (df["Eye movement type"] == "Fixation") &
         (df[ts_col].between(t_start, t_end))
     ].copy()
 
+    # Keep only valid normalized coordinates
     fix = fix[
         (fix[x_col].between(0, 1)) &
         (fix[y_col].between(0, 1))
     ]
 
-    # 🔥 Spalten vereinheitlichen
+    # Standardize column names
     fix = fix.rename(columns={
         ts_col: "Recording timestamp",
         x_col: "Fixation point X",
         y_col: "Fixation point Y",
         dur_col: "Gaze event duration"
     })
-
+    # Sort fixations by time
     return fix.sort_values("Recording timestamp").reset_index(drop=True), duration
 
 
@@ -108,20 +117,24 @@ def map_aois(fix):
 
     names, types = [], []
 
+    # Calculate grid cell size
     dx = (PLOT["x2"] - PLOT["x1"]) / GRID_COLS
     dy = (PLOT["y2"] - PLOT["y1"]) / GRID_ROWS
 
+    # Assign each fixation to one AOI
     for _, row in fix.iterrows():
 
         x = row["Fixation point X"]
         y = row["Fixation point Y"]
 
-        # GRID
+        # Check scatter plot grid first
         if PLOT["x1"] <= x <= PLOT["x2"] and PLOT["y1"] <= y <= PLOT["y2"]:
 
+            # Calculate grid position
             col = int((x - PLOT["x1"]) / dx)
             row_idx = int((y - PLOT["y1"]) / dy)
 
+            # Avoid index overflow at plot borders
             col = min(col, GRID_COLS - 1)
             row_idx = min(row_idx, GRID_ROWS - 1)
 
@@ -144,9 +157,11 @@ def map_aois(fix):
         if assigned:
             continue
 
+        # Assign remaining fixations to background
         names.append("background")
         types.append("irrelevant")
 
+    # Add AOI information to fixation data
     fix["AOI"] = names
     fix["AOI_type"] = types
 
@@ -159,29 +174,40 @@ def map_aois(fix):
 
 def compute_metrics(fix, duration):
 
+    # Sum dwell time per AOI
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
     total_dwell = dwell.sum()
 
     def ttff(target):
+        # Time to first fixation for one AOI
         subset = fix[fix["AOI"] == target]
         if len(subset) == 0:
             return np.nan
         return (subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]) / 1000
 
+    # Create AOI sequence
     seq = fix["AOI"].tolist()
+    # Remove consecutive duplicate AOIs
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i-1]]
 
+    # Build transition matrix
     transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
     trans_df = pd.DataFrame(transitions, columns=["from", "to"])
     matrix = pd.crosstab(trans_df["from"], trans_df["to"])
 
+    # Calculate irrelevant dwell ratio
     irrelevant = fix[fix["AOI_type"] == "irrelevant"]["Gaze event duration"].sum()
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
 
     return {
+        # Time to first fixation
         "TTFF_answers": ttff("answers"),
+        # Sequence metric
         "Transitions": len(seq_clean),
+        # Irrelevant gaze metric
         "Irrelevant_Ratio": irrelevant_ratio,
+
+        # Transition matrix
         "Transition_Matrix": matrix
     }
 
@@ -199,20 +225,25 @@ def plot_aoi_overlay(participant):
     plt.figure(figsize=(6, 9))
     plt.imshow(img)
 
+    # Get plot boundaries
     x1, x2 = PLOT["x1"], PLOT["x2"]
     y1, y2 = PLOT["y1"], PLOT["y2"]
 
+    # Calculate grid cell size
     dx = (x2 - x1) / GRID_COLS
     dy = (y2 - y1) / GRID_ROWS
 
+    # Draw vertical grid lines
     for i in range(GRID_COLS + 1):
         x = (x1 + i * dx) * w
         plt.plot([x, x], [y1 * h, y2 * h], linestyle=(0, (4, 4)), color="#1f4aff")
 
+    # Draw horizontal grid lines
     for j in range(GRID_ROWS + 1):
         y = (y1 + j * dy) * h
         plt.plot([x1 * w, x2 * w], [y, y], linestyle=(0, (4, 4)), color="#1f4aff")
 
+    # Draw UI AOI rectangles
     for aoi in get_ui_aois():
         rect = plt.Rectangle(
             (aoi["x1"] * w, aoi["y1"] * h),
@@ -272,21 +303,27 @@ def run_analysis(participant):
         if qid != 12:
             continue
 
+        # Extract fixations for this question
         fix, duration = get_fixations_for_question(df, q_label)
         if fix is None:
             continue
 
+        # Map fixations to AOIs
         fix = map_aois(fix)
 
+        # Calculate metrics
         metrics = compute_metrics(fix, duration)
 
+        # Create markdown summary
         create_markdown(participant, metrics)
 
+        # Store transition matrix separately
         matrix = metrics.pop("Transition_Matrix")
         matrix["Participant"] = participant
         matrix["Question"] = qid
         matrices.append(matrix)
 
+        # Store metric row
         row = {"Participant": participant, "Question": qid}
         row.update(metrics)
         results.append(row)
@@ -303,6 +340,7 @@ if __name__ == "__main__":
     all_results = []
     all_matrices = []
 
+    # Run analysis for all participants
     for p in PARTICIPANTS:
 
         plot_aoi_overlay(p)
@@ -315,9 +353,11 @@ if __name__ == "__main__":
         if df_mat is not None and not df_mat.empty:
             all_matrices.append(df_mat)
 
+    # Save metric results
     if len(all_results) > 0:
         pd.concat(all_results).to_csv(os.path.join(OUTPUT_DIR, "aoi_metrics_q12.csv"), index=False)
 
+    # Save transition matrix
     if len(all_matrices) > 0:
         pd.concat(all_matrices).to_csv(os.path.join(OUTPUT_DIR, "transition_matrix_q12.csv"), index=False)
 

@@ -19,34 +19,41 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 PARTICIPANTS = ["Participant41"]
 
 # ============================================================
-# AOIs (UNVERÄNDERT)
+# AOIs
 # ============================================================
 
 def get_aois_q11():
+    # AOI coordinates are normalized between 0 and 1
     return [
 
+        # Question text area
         {"name": "question", "x1": 0.30, "y1": 0.06, "x2": 0.70, "y2": 0.16, "type": "relevant"},
 
+        # Target year AOI
         {"name": "year_2012",
          "x1": 0.515, "x2": 0.545,
          "y1": 0.24, "y2": 0.60,
          "type": "relevant"},
 
+        # Left chart area
         {"name": "Rest",
          "x1": 0.415, "x2": 0.515,
          "y1": 0.22, "y2": 0.60,
          "type": "relevant"},
 
+        # Right chart area
         {"name": "Rest1",
          "x1": 0.545, "x2": 0.602,
          "y1": 0.22, "y2": 0.60,
          "type": "relevant"},
 
+        # Answer options area
         {"name": "answers",
          "x1": 0.28, "y1": 0.67,
          "x2": 0.72, "y2": 0.95,
          "type": "relevant"},
 
+        # Full-screen fallback AOI
         {"name": "background",
          "x1": 0.0, "y1": 0.0,
          "x2": 1.0, "y2": 1.0,
@@ -54,16 +61,17 @@ def get_aois_q11():
     ]
 
 # ============================================================
-# HELPERS
+# HELPER FUNCTIONS
 # ============================================================
 
 def extract_question_id(event_value):
+    # Extract question number from event label
     m = re.search(r"Question\s+(\d+)", str(event_value))
     return int(m.group(1)) if m else None
 
 
 def get_fixations_for_question(df, question_label):
-
+    # Get URL start and end events for this question
     url_events = df[
         (df["Event"].isin(["URLStart", "URLEnd"])) &
         (df["Event value"] == question_label)
@@ -72,21 +80,26 @@ def get_fixations_for_question(df, question_label):
     if len(url_events) < 2:
         return None, None
 
+    # Define question time window
     t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp [ms]"].min()
     t_end   = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp [ms]"].max()
 
+    # Convert duration to seconds
     duration = (t_end - t_start) / 1000
 
+    # Select fixations within this time window
     fix = df[
         (df["Eye movement type"] == "Fixation") &
         (df["Recording timestamp [ms]"].between(t_start, t_end))
         ].copy()
 
+    # Keep only valid normalized coordinates
     fix = fix[
         (fix["Fixation point X [MCS norm]"].between(0, 1)) &
         (fix["Fixation point Y [MCS norm]"].between(0, 1))
         ]
 
+    # Sort fixations by time
     return fix.sort_values("Recording timestamp [ms]").reset_index(drop=True), duration
 
 # ============================================================
@@ -94,7 +107,7 @@ def get_fixations_for_question(df, question_label):
 # ============================================================
 
 def map_aois(fix, aois):
-
+    # Define AOI priority for overlapping areas
     priority = [
         "year_2012",
         "Rest",
@@ -104,6 +117,7 @@ def map_aois(fix, aois):
         "background"
     ]
 
+    # Sort AOIs by priority
     aois_sorted = sorted(
         aois,
         key=lambda a: priority.index(a["name"]) if a["name"] in priority else 999
@@ -112,6 +126,8 @@ def map_aois(fix, aois):
     aoi_names = []
     aoi_types = []
 
+
+    # Assign each fixation to one AOI
     for _, row in fix.iterrows():
         x = row["Fixation point X [MCS norm]"]
         y = row["Fixation point Y [MCS norm]"]
@@ -129,6 +145,7 @@ def map_aois(fix, aois):
             aoi_names.append("background")
             aoi_types.append("irrelevant")
 
+    # Add AOI information to fixation data
     fix["AOI"] = aoi_names
     fix["AOI_type"] = aoi_types
 
@@ -140,46 +157,58 @@ def map_aois(fix, aois):
 
 def compute_metrics(fix, duration):
 
+    # Sum dwell time per AOI
     dwell = fix.groupby("AOI")["Gaze event duration [ms]"].sum()
     total_dwell = dwell.sum()
 
     def ttff(target):
+        # Time to first fixation for one AOI
         subset = fix[fix["AOI"] == target]
         if len(subset) == 0:
             return np.nan
         return (subset["Recording timestamp [ms]"].iloc[0] - fix["Recording timestamp [ms]"].iloc[0]) / 1000
 
+    # Create AOI sequence
     seq = fix["AOI"].tolist()
+    # Remove consecutive duplicate AOIs
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i - 1]]
 
+    # Build transition matrix
     transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
     trans_df = pd.DataFrame(transitions, columns=["from", "to"])
     matrix = pd.crosstab(trans_df["from"], trans_df["to"])
 
+    # Calculate transitions per second
     transitions_per_sec = len(seq_clean) / duration if duration > 0 else 0
 
+    # Calculate irrelevant dwell ratio
     irrelevant = fix[fix["AOI_type"] == "irrelevant"]["Gaze event duration [ms]"].sum()
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
 
     return {
+        # Time to first fixation
         "TTFF_2012": ttff("year_2012"),
         "TTFF_answers": ttff("answers"),
 
+        # Dwell times
         "Dwell_2012": dwell.get("year_2012", 0),
         "Dwell_answers": dwell.get("answers", 0),
 
+        # Sequence metrics
         "Transitions": len(seq_clean),
         "Transitions_per_sec": transitions_per_sec,
         "Sequence_length": len(seq_clean),
         "First_AOI": next((a for a in seq_clean if a != "background"), None),
 
+        # Irrelevant gaze metric
         "Irrelevant_Ratio": irrelevant_ratio,
 
+        # Transition matrix
         "Transition_Matrix": matrix
     }
 
 # ============================================================
-# AOI OVERLAY (Q8 STYLE 🔥)
+# AOI OVERLAY
 # ============================================================
 
 def plot_aoi_overlay():
@@ -198,9 +227,10 @@ def plot_aoi_overlay():
     plt.figure(figsize=(6, 9))
     plt.imshow(img)
 
+    # Draw all AOI rectangles
     for aoi in aois:
 
-        # 🎯 Farben
+        # Highlight target AOI
         if aoi["name"] == "year_2012":
             color = "#ff2d2d"
             lw = 1.2
@@ -208,11 +238,13 @@ def plot_aoi_overlay():
             color = "#1f4aff" if aoi["type"] == "relevant" else "#999999"
             lw = 0.9
 
+        # Convert normalized coordinates to pixels
         x1 = aoi["x1"] * w
         y1 = aoi["y1"] * h
         width = (aoi["x2"] - aoi["x1"]) * w
         height = (aoi["y2"] - aoi["y1"]) * h
 
+        # Draw AOI rectangle
         rect = plt.Rectangle(
             (x1, y1),
             width,
@@ -225,10 +257,8 @@ def plot_aoi_overlay():
 
         plt.gca().add_patch(rect)
 
-        # =========================
-        # 🔥 SAUBERE LABEL POSITIONEN
-        # =========================
 
+        # Calculate label position
         center_y = y1 + height / 2
 
         if aoi["name"] == "year_2012":
@@ -248,7 +278,7 @@ def plot_aoi_overlay():
             text_y = center_y
 
         elif aoi["name"] == "background":
-            # ❗ KEINE LINIE + kein Chaos
+            # Add background label without connector line
             plt.text(10, 20, "background", fontsize=6, color="gray")
             continue
 
@@ -256,7 +286,8 @@ def plot_aoi_overlay():
             text_x = x1 + width + 10
             text_y = center_y
 
-        # 🔥 Linie NUR für relevante AOIs (kein background!)
+
+        # Draw connector line for relevant AOIs
         if aoi["name"] != "background":
             plt.plot(
                 [x1 + width, text_x],
@@ -304,6 +335,7 @@ def run_analysis(participant):
         if qid != 11:
             continue
 
+        # Extract fixations for this question
         fix, duration = get_fixations_for_question(df, q_label)
         if fix is None:
             continue
@@ -311,7 +343,7 @@ def run_analysis(participant):
         aois = get_aois_q11()
         fix = map_aois(fix, aois)
 
-        # 🔥 IDENTISCHE CONSOLE AUSGABE WIE Q5
+        # Print debug information
         print("\n==============================")
         print("AOI Counts fuer", participant)
         print(fix["AOI"].value_counts())
@@ -320,14 +352,16 @@ def run_analysis(participant):
         print(fix.groupby("AOI")["Gaze event duration [ms]"].sum())
         print("==============================\n")
 
+        # Calculate metrics
         metrics = compute_metrics(fix, duration)
 
-        # 🔥 Transition Matrix speichern
+        # Store transition matrix separately
         matrix = metrics.pop("Transition_Matrix")
         matrix["Participant"] = participant
         matrix["Question"] = qid
         matrices.append(matrix)
 
+        # Store metric row
         row = {"Participant": participant, "Question": qid}
         row.update(metrics)
         results.append(row)

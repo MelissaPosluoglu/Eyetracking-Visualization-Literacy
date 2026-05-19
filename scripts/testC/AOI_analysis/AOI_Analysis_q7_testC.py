@@ -9,11 +9,13 @@ from PIL import Image
 # PATHS
 # ============================================================
 
+# Define project, data, stimulus, and results directories
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA_PATH = os.path.join(BASE_DIR, "data", "testC")
 STIM_PATH = os.path.join(DATA_PATH, "stimuli")
 RESULTS_BASE = os.path.join(BASE_DIR, "results", "testC")
 
+# Participants included in the analysis
 PARTICIPANTS = ["Participant51"]
 
 def get_output_dir(participant):
@@ -61,6 +63,9 @@ def normalize_columns(df):
 
     return df
 
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
 def extract_question_id(event_value):
     m = re.search(r"Question\s+(\d+)", str(event_value))
     return int(m.group(1)) if m else None
@@ -71,12 +76,14 @@ def get_fixations_for_question(df, question_label):
         (df["Event value"] == question_label)
         ]
 
+    # Skip if either URLStart or URLEnd is missing
     if len(url_events) < 2:
         return None, None
 
     t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
     t_end = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
 
+    # Fallback for missing or unrealistically long trial durations
     if pd.isna(t_end) or (t_end - t_start) > 30000:
         t_end = t_start + 25000
 
@@ -119,6 +126,7 @@ def map_aois(fix, aois):
                 assigned = True
                 break
 
+        # Fallback if no AOI matches
         if not assigned:
             aoi_names.append("background")
             aoi_types.append("irrelevant")
@@ -133,14 +141,18 @@ def map_aois(fix, aois):
 # ============================================================
 
 def compute_metrics(fix, duration):
+
+    # Sum dwell time per AOI
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
     total_dwell = dwell.sum()
 
+    # Normalize dwell time if total fixation duration exceeds trial duration
     if total_dwell > duration and total_dwell > 0:
         scale = duration / total_dwell
         dwell = dwell * scale
         total_dwell = dwell.sum()
 
+    # Compute relative dwell time per AOI
     dwell_ratio = {k: v / total_dwell for k, v in dwell.items()} if total_dwell > 0 else {}
 
     def ttff(target):
@@ -149,9 +161,11 @@ def compute_metrics(fix, duration):
             return np.nan
         return subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]
 
+    # Create AOI sequence and remove consecutive duplicates
     seq = fix["AOI"].tolist()
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i - 1]]
 
+    # Build transition matrix from cleaned scanpath sequence
     if len(seq_clean) >= 2:
         transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
         trans_df = pd.DataFrame(transitions, columns=["from", "to"])
@@ -159,6 +173,7 @@ def compute_metrics(fix, duration):
     else:
         matrix = pd.DataFrame()
 
+    # Background dwell ratio after normalization
     irrelevant = dwell.get("background", 0)
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
     transitions_count = max(len(seq_clean) - 1, 0)
@@ -216,6 +231,8 @@ def plot_aoi_overlay(output_dir):
     plt.imshow(img)
 
     for aoi in aois:
+
+        # Highlight the target AOI in red
         if aoi["name"] == "seoul":
             color = "#ff2d2d"
             lw = 0.9

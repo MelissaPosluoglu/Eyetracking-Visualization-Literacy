@@ -57,10 +57,12 @@ def normalize_columns(df):
     return df
 
 def extract_question_id(event_value):
+    # Extract question number from event label
     m = re.search(r"Question\s+(\d+)", str(event_value))
     return int(m.group(1)) if m else None
 
 def get_fixations_for_question(df, question_label):
+    # Get URL start and end events for this question
     url_events = df[
         (df["Event"].isin(["URLStart", "URLEnd"])) &
         (df["Event value"] == question_label)
@@ -69,24 +71,29 @@ def get_fixations_for_question(df, question_label):
     if len(url_events) < 2:
         return None, None
 
+    # Define question time window
     t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
     t_end = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
 
     if pd.isna(t_end) or (t_end - t_start) > 30000:
         t_end = t_start + 25000
 
+    # Convert duration to seconds
     duration = (t_end - t_start)
 
+    # Select fixation data within this time window
     fix = df[
         (df["Eye movement type"] == "Fixation") &
         (df["Recording timestamp"].between(t_start, t_end))
         ].copy()
 
+    # Keep only valid normalized coordinates
     fix = fix[
         (fix["Fixation point X (MCSnorm)"].between(0, 1)) &
         (fix["Fixation point Y (MCSnorm)"].between(0, 1))
         ]
 
+    # Sort fixations by timestamp
     return fix.sort_values("Recording timestamp").reset_index(drop=True), duration
 
 # ============================================================
@@ -94,6 +101,7 @@ def get_fixations_for_question(df, question_label):
 # ============================================================
 
 def map_aois(fix, aois):
+    # Check smaller AOIs before the background AOI
     aois_sorted = sorted(
         aois,
         key=lambda a: (a["name"] == "background", (a["x2"] - a["x1"]) * (a["y2"] - a["y1"]))
@@ -108,6 +116,7 @@ def map_aois(fix, aois):
 
         assigned = False
 
+        # Assign each fixation to one AOI
         for aoi in aois_sorted:
             if aoi["x1"] <= x <= aoi["x2"] and aoi["y1"] <= y <= aoi["y2"]:
                 aoi_names.append(aoi["name"])
@@ -119,6 +128,7 @@ def map_aois(fix, aois):
             aoi_names.append("background")
             aoi_types.append("irrelevant")
 
+    # Add AOI information to fixation data
     fix["AOI"] = aoi_names
     fix["AOI_type"] = aoi_types
 
@@ -129,6 +139,7 @@ def map_aois(fix, aois):
 # ============================================================
 
 def compute_metrics(fix, duration):
+    # Sum dwell time per AOI
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
     total_dwell = dwell.sum()
 
@@ -137,6 +148,7 @@ def compute_metrics(fix, duration):
         dwell = dwell * scale
         total_dwell = dwell.sum()
 
+    # Calculate dwell ratios
     dwell_ratio = {k: v / total_dwell for k, v in dwell.items()} if total_dwell > 0 else {}
 
     def ttff(target):
@@ -145,17 +157,23 @@ def compute_metrics(fix, duration):
             return np.nan
         return subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]
 
+    # Create AOI sequence
     seq = fix["AOI"].tolist()
+    # Remove consecutive duplicate AOIs
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i - 1]]
 
     if len(seq_clean) >= 2:
+        # Build transition matrix
         transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
         trans_df = pd.DataFrame(transitions, columns=["from", "to"])
         matrix = pd.crosstab(trans_df["from"], trans_df["to"])
     else:
         matrix = pd.DataFrame()
 
+    # Calculate transitions per second
     transitions_count = max(len(seq_clean) - 1, 0)
+
+    # Calculate irrelevant dwell ratio
     irrelevant = dwell.get("background", 0)
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
 
@@ -306,6 +324,7 @@ def run_analysis(participant):
 # ============================================================
 
 if __name__ == "__main__":
+    # Create AOI overlay for visual inspection
     plot_aoi_overlay()
 
     all_results = []

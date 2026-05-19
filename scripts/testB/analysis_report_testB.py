@@ -359,5 +359,5 @@ try:
     print("\nPosthoc:\n", posthoc)
 
 except ImportError:
-    print("\n⚠️ pingouin is not installed → ANOVA skipped")
-    print("👉 Install it with: pip install pingouin")
+    print("\n pingouin is not installed → ANOVA skipped")
+    print(" Install it with: pip install pingouin")

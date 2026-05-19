@@ -9,6 +9,7 @@ from PIL import Image
 # PATHS
 # ============================================================
 
+# Define project, data, stimulus, and output directories
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA_PATH = os.path.join(BASE_DIR, "data", "testD")
 STIM_PATH = os.path.join(DATA_PATH, "stimuli")
@@ -19,7 +20,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 PARTICIPANTS = ["Participant61"]
 
 # ============================================================
-# AOIs (Q8 FINAL)
+# AOIs (Q8)
 # ============================================================
 
 def get_aois_q8():
@@ -66,22 +67,26 @@ def get_fixations_for_question(df, question_label):
         (df["Event value"] == question_label)
         ]
 
+    # Skip if either URLStart or URLEnd is missing
     if len(url_events) < 2:
         return None, None
 
     t_start = url_events[url_events["Event"] == "URLStart"]["Recording timestamp"].min()
     t_end = url_events[url_events["Event"] == "URLEnd"]["Recording timestamp"].max()
 
+    # Fallback for missing or unrealistic trial end times
     if pd.isna(t_end) or (t_end - t_start) > 30000:
         t_end = t_start + 25000
 
     duration = (t_end - t_start)
 
+    # Select fixation events within the trial time window
     fix = df[
         (df["Eye movement type"] == "Fixation") &
         (df["Recording timestamp"].between(t_start, t_end))
         ].copy()
 
+    # Keep only fixations with valid normalized screen coordinates
     fix = fix[
         (fix["Fixation point X (MCSnorm)"].between(0, 1)) &
         (fix["Fixation point Y (MCSnorm)"].between(0, 1))
@@ -115,6 +120,7 @@ def map_aois(fix, aois):
                 assigned = True
                 break
 
+        # Fallback if no AOI matches
         if not assigned:
             aoi_names.append("background")
             aoi_types.append("irrelevant")
@@ -129,14 +135,18 @@ def map_aois(fix, aois):
 # ============================================================
 
 def compute_metrics(fix, duration):
+
+    # Sum dwell time per AOI
     dwell = fix.groupby("AOI")["Gaze event duration"].sum()
     total_dwell = dwell.sum()
 
+    # Normalize dwell time if total fixation duration exceeds trial duration
     if total_dwell > duration and total_dwell > 0:
         scale = duration / total_dwell
         dwell = dwell * scale
         total_dwell = dwell.sum()
 
+    # Compute relative dwell time per AOI
     dwell_ratio = {k: v / total_dwell for k, v in dwell.items()} if total_dwell > 0 else {}
 
     def ttff(target):
@@ -145,9 +155,11 @@ def compute_metrics(fix, duration):
             return np.nan
         return subset["Recording timestamp"].iloc[0] - fix["Recording timestamp"].iloc[0]
 
+    # Create AOI sequence and remove consecutive duplicates
     seq = fix["AOI"].tolist()
     seq_clean = [seq[i] for i in range(len(seq)) if i == 0 or seq[i] != seq[i - 1]]
 
+    # Build transition matrix from cleaned scanpath sequence
     if len(seq_clean) >= 2:
         transitions = list(zip(seq_clean[:-1], seq_clean[1:]))
         trans_df = pd.DataFrame(transitions, columns=["from", "to"])
@@ -156,6 +168,8 @@ def compute_metrics(fix, duration):
         matrix = pd.DataFrame()
 
     transitions_count = max(len(seq_clean) - 1, 0)
+
+    # Background dwell ratio after normalization
     irrelevant = dwell.get("background", 0)
     irrelevant_ratio = irrelevant / total_dwell if total_dwell > 0 else 0
 
@@ -197,6 +211,8 @@ def plot_aoi_overlay():
     plt.imshow(img)
 
     for aoi in aois:
+
+        # Highlight the target AOI in red
         if aoi["name"] == "month_feb":
             color = "#ff2d2d"
             lw = 0.9
@@ -221,6 +237,7 @@ def plot_aoi_overlay():
 
         plt.gca().add_patch(rect)
 
+        # Position labels individually to keep the overlay readable
         if aoi["name"] == "month_rest":
             text_x, text_y, ha, va = x1 + 3, y1 + 8, "left", "top"
         elif aoi["name"] in ["month_jan", "price_50"]:
@@ -306,6 +323,8 @@ def run_analysis(participant):
 # ============================================================
 
 if __name__ == "__main__":
+
+    # Create AOI overlay for visual inspection
     plot_aoi_overlay()
 
     all_results = []
