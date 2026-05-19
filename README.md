@@ -1,102 +1,228 @@
-# Mini-VLAT Eye-Tracking – Visualization Literacy
+# 👁️ Eye-Tracking & Visualization Literacy (Mini-VLAT)
 
-Dieses Repository enthält den Analysecode für eine Eye-Tracking-Studie zur Untersuchung der Visualisierungskompetenz (Visualization Literacy) mithilfe des **Mini-VLAT-Tests**.  
-Der Fokus liegt auf der zeitlich präzisen Segmentierung einzelner Testfragen sowie auf der Analyse und Visualisierung von Fixationen auf stimulusbasierter Ebene.
+This repository contains the analysis code for an eye-tracking study investigating **visualization literacy** using the **Mini-VLAT test**.
 
----
-
-## 📌 Projektkontext
-
-Das Projekt wurde im Rahmen eines universitären Forschungsprojekts durchgeführt und untersucht den Zusammenhang zwischen:
-
-- Visualisierungskompetenz (Mini-VLAT)
-- Blickverhalten (Eye Tracking)
-- Zeitdruck und Aufgabenbearbeitung
-
-Die Eye-Tracking-Daten wurden mit **Tobii** aufgezeichnet und als `.tsv` exportiert.  
-Die Segmentierung der Aufgaben erfolgt anhand von **URL Start / URL End Events**, die während der webbasierten Durchführung des Mini-VLAT-Tests geloggt wurden.
+The project focuses on how visual search behavior (gaze patterns) relates to task performance and visualization literacy.
 
 ---
 
-## 🐍 Python-Umgebung
+## 📌 Project Overview
 
-Dieses Projekt verwendet **Python 3.11**.
+This study investigates the relationship between:
 
-### Voraussetzungen
+- Visualization literacy (Mini-VLAT)
+- Eye-tracking behavior (fixations, saccades, scanpaths)
+- Task performance (accuracy, score)
+- Cognitive load and time pressure
 
-- Python **3.11.x**
-- Git
-- Windows / macOS / Linux
+Eye-tracking data was recorded using **Tobii eye trackers** and processed using Python-based analysis pipelines.
 
 ---
 
-## ⚙️ Setup (virtuelle Umgebung)
+## 🧠 Research Goals
 
-### 2️⃣ Virtuelle Umgebung erstellen
+The main objective is to understand how differences in visualization literacy are reflected in gaze behavior.
+
+Key research questions include:
+
+- Do high- and low-performing participants differ in attention allocation?
+- How does visual search efficiency (TTFF) relate to performance?
+- Are structured scanpaths associated with better performance?
+- How do cognitive load and time pressure influence gaze behavior?
+
+---
+
+## 📁 Project Structure
+
+
+EYETRACKING-VISUALIZATION-LITERACY/
+│
+├── data/
+│ └── testA/
+│ ├── .csv / .tsv (AOI metrics, gaze data, answers)
+│
+├── scripts/
+│ └── testA/
+│ ├── AOI_analysis/
+│ ├── fixation_plots
+│ ├── correlation_.py
+│ ├── regression_.py
+│ ├── scanpath_analysis.py
+│ ├── global_statistic_analysis.py
+│ ├── cognitive_load_likert.py
+│ ├── testB/
+│ ├── testC/
+│ └── testD/
+│
+├── results/
+│ └── testA/
+│ ├── plots/
+│ ├── statistics/
+│ └── reports/
+│
+└── README.md
+
+
+---
+
+## ⚙️ Setup
+
+### Requirements
+
+- Python **3.11**
+- pip
+- virtual environment (recommended)
+
+---
+
+### 1️⃣ Create virtual environment
+
 ```bash
 python -m venv .venv
 ```
 
-### 3️⃣ Virtuelle Umgebung aktivieren
+### 2️⃣ Activate environment
 
 Windows (PowerShell):
+
 ```bash
 .venv\Scripts\Activate.ps1
 ```
 
 macOS / Linux:
+
 ```bash
 source .venv/bin/activate
 ```
 
-Nach der Aktivierung sollte im Terminal Folgendes erscheinen:
-```
-(.venv)
-```
-
-### 4️⃣ Abhängigkeiten installieren
+### 3️⃣ Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
----
+### ▶️ Running the Analysis
 
-## ▶️ Ausführen der Fixationsanalyse
+Navigate to the test condition:
 
-Die Fixationsvisualisierung erzeugt für jede der 12 Mini-VLAT-Fragen eine eigene Abbildung, 
-in der Fixationen über dem jeweiligen Stimulusbild dargestellt werden.
-
-Skript starten
 ```bash
-cd analysis
-python fixation_all_questions.py
+cd scripts/testA
 ```
 
+---
+
+## 📊 Core Analyses
+
+### Correlation Analysis
+```bash
+python correlation_irrelevant_ratio.py
+```
+
+```bash
+python correlation_transitions.py
+```
+
+```bash
+python correlation_ttff.py
+```
+
+### Regression Analysis
+```bash
+python regression_irrelevant_ratio.py
+```
+
+### Fixation & Heatmaps
+```bash
+python fixations_plot.py
+```
+
+```bash
+python fixation_heat.py
+```
+
+### Scanpath Analysis
+```bash
+python scanpath_analysis.py
+```
+
+### Global Statistics
+```bash
+python global_statistic_analysis.py
+```
+
+### Cognitive Load Analysis
+```bash
+python cognitive_load_likert.py
+```
+
+---
 
 ## 📊 Output
 
-- Für jede Frage wird ein Fixationsplot erzeugt
-- Die Ergebnisse werden automatisch im Ordner `output_fixations/` gespeichert
+Many Results are automatically saved in:
 
-Jede Abbildung zeigt:
+results/testA/
 
-- Fixationspositionen
-- Fixationsdauer (Punktgröße)
-- stimulus-spezifische Blickverteilung
+Including:
 
----
-
-## 🧠 Methodik (kurz)
-
-- Die Segmentierung der Eye-Tracking-Daten erfolgt über **URL Start / URL End Events**
-- Jede Fixation wird eindeutig einer Mini-VLAT-Frage zugeordnet
-- Die Analyse erfolgt stimulusbasiert (eine Frage = ein Bild)
-- Die Fixationsdauer wird visuell skaliert dargestellt
+Scatterplots (correlations), 
+Fixation plots, 
+Heatmaps, 
+Statistical summaries, 
+Regression outputs
 
 ---
 
-## 📄 Lizenz
+### 📄 Data Description
 
-Dieses Projekt steht unter der MIT License.
-Eine freie Nutzung für Forschungs- und Lehrzwecke ist ausdrücklich erlaubt.
+The analysis uses:
+
+Eye-Tracking Data
+- Fixations
+- Saccades
+- TTFF (Time to First Fixation)
+
+AOI-Based Metrics
+- Dwell time
+- Fixation count
+- Irrelevant fixation ratio
+- Transition counts
+
+Performance Data
+- Task scores
+- Accuracy per participant
+
+---
+
+## 🧪 Methodology
+
+- Eye-tracking data is segmented using URL Start / URL End events
+- Each fixation is mapped to predefined Areas of Interest (AOIs)
+- Analysis is performed at:
+  - Task level
+  - Participant level
+  - Cross-task level
+
+Key measures:
+
+- TTFF → visual search efficiency
+- Irrelevant fixation ratio → attention allocation
+- Transitions → structural gaze behavior
+- Scanpaths → temporal organization
+
+---
+
+## 📈 Notes
+- Data is aggregated across multiple Mini-VLAT tasks
+- Statistical analysis uses Spearman correlations
+- Regression models are exploratory (not causal)
+
+---
+
+## 👥 Authors
+
+Assiele Meragi, 
+Melissa Posluoglu, 
+Gülsen Uzunoglu, 
+Eliana Elshani, 
+Jessica Belovs 
