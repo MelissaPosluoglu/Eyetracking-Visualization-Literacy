@@ -1,0 +1,29 @@
+participant,age,gender,profession,difficult,mental workload,stressed,time pressure,phisically demanding,confidence,task understanding,visual aids,type,visual aid,chart design,feedback,eye tracking problems,distracted,fatigue,time,working with charts or vis,similar vis test experience
+1,30,male,Informatik,2,3,3,4,2,4,4,yes,both,glasses,4,1,1,1,2,morning,5,1
+2,21,female,Soziale Arbeit,2,1,2,3,2,3,3,no,none,none,3,1,1,1,1,midday,1,1
+3,24,male,Maschinenbau,3,2,4,2,1,3,5,no,none,none,3,1,1,1,1,midday,2,1
+4,21,female,Soziale Arbeit,3,3,2,4,1,3,2,no,none,none,2,1,1,1,1,midday,1,1
+5,20,female,Wirtschaftsinformatik,3,4,3,2,4,2,2,no,none,none,2,3,4,2,4,midday,2,1
+6,20,female,Berufspädagogik,1,3,3,3,1,4,5,no,none,none,3,1,1,1,1,midday,3,1
+7,19,female,Lehramt Chemie,2,4,2,3,3,3,4,no,none,none,3,1,1,1,1,midday,5,3
+8,19,female,Informatik,2,4,4,3,2,4,5,no,none,none,4,4,2,1,2,morning,1,1
+9,19,female,Wirtschaftswissenschaft,2,2,1,1,1,2,4,no,none,none,4,1,1,1,1,midday,2,1
+10,32,male,Informatik,4,3,1,5,1,2,5,yes,both,glasses,5,1,1,1,3,midday,5,1
+11,21,female,Wirtschaft,1,2,2,2,1,4,5,no,none,none,4,1,3,1,1,midday,5,3
+12,28,female,Informatik,2,2,3,5,1,2,5,yes,far-sighted,contact lenses,4,1,1,1,1,morning,4,1
+13,23,male,Software Engineering,3,4,3,5,1,4,3,yes,near-sighted,glasses,3,1,1,1,2,evening,1,1
+14,22,female,Wirtschaftsinformatik,2,3,3,2,1,2,4,yes,near-sighted,glasses,4,4,1,1,2,midday,4,2
+15,27,male,Informatik,3,4,4,4,2,4,5,no,none,none,4,1,1,1,1,midday,5,3
+16,20,female,Soziale Arbeit,3,4,3,3,2,2,4,no,none,none,3,1,1,1,1,midday,2,1
+17,36,male,Informatik,2,4,4,4,1,3,4,yes,near-sighted,glasses,3,1,3,2,1,midday,5,2
+18,19,male,Wirtschaftswissenschaften,1,1,1,2,1,4,5,no,none,none,4,3,1,1,3,evening,3,1
+19,24,male,Software Engineering,2,3,2,3,1,4,4,no,none,none,3,1,4,2,1,midday,4,1
+20,22,male,Informatik,3,2,3,4,2,3,3,no,none,none,2,1,1,1,4,midday,2,1
+21,33,male,Medizininformatiker,1,4,3,4,1,4,4,yes,near-sighted,contact lenses,4,1,1,1,1,morning,5,5
+22,25,male,PHD,1,3,2,2,1,5,4,no,none,none,1,1,1,1,2,midday,4,5
+23,31,male,Informatik PHD,2,4,4,4,1,4,5,no,none,none,3,1,1,1,1,midday,5,4
+24,30,male,Informatik PHD,1,2,1,1,1,5,5,no,none,none,4,3,1,1,1,midday,4,4
+25,22,female,Wirtschaftsinformatik,3,4,3,5,1,3,2,yes,near-sighted,glasses,2,1,4,1,2,midday,2,1
+26,22,male,Bauingenieur,2,3,4,4,1,4,5,no,none,none,3,1,1,1,1,evening,4,2
+27,33,male,Informatik,1,4,1,2,1,4,5,yes,near-sighted,none,2,2,3,2,3,midday,5,1
+

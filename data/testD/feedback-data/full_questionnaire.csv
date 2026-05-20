@@ -1,0 +1,6 @@
+participant,age,gender,profession,difficult,mental workload,stressed,time pressure,phisically demanding,confidence,task understanding,visual aids,type,visual aid,chart design,feedback,eye tracking problems,distracted,fatigue,time,working with charts or vis,similar vis test experience
+61,24,male,Data Science,2,4,2,1,1,3,5,yes,far-sighted,contact lenses,5,1,1,1,3,midday,4,1
+62,23,male,Stadtplanung,2,3,2,1,1,3,4,no,none,none,2,4,1,1,1,midday,2,1
+63,22,male,Informatik,1,2,1,1,1,4,5,yes,near-sighted,glasses,4,1,1,1,1,evening,2,1
+64,45,female,Verkehrswissenschaften,3,2,1,2,1,3,2,no,none,none,1,1,1,1,1,evening,1,1
+65,46,female,Industrial Engineer,2,2,2,1,1,2,5,yes,far-sighted,glasses,3,1,2,2,3,evening,1,2
