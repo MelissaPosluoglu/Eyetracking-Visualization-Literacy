@@ -351,7 +351,18 @@ Participant27,178.0,10,area,14.6,1
 Participant27,178.0,10,stackedarea,25.0,0
 Participant27,178.0,10,scatter,16.2,1
 
-
+Participant28,260.2,6,treemap,25.0,0
+Participant28,260.2,6,histogram,23.3,1
+Participant28,260.2,6,100stacked,23.1,1
+Participant28,260.2,6,map,21.7,0
+Participant28,260.2,6,pie,24.9,1
+Participant28,260.2,6,bubble,24.6,1
+Participant28,260.2,6,stackedbar,21.6,0
+Participant28,260.2,6,line,16.6,1
+Participant28,260.2,6,bar,21.8,0
+Participant28,260.2,6,area,17.4,1
+Participant28,260.2,6,stackedarea,22.4,0
+Participant28,260.2,6,scatter,24.1,0
 
 
 
