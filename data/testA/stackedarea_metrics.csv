@@ -20,3 +20,6 @@ P24	12.05	8.28	5585	5796	0.276	0.182	31
 P25	3.04	8.35	3419	6184	0.201	0.337	22
 P26	6.20	0	137	3087	0.005	0.673	36
 P27	4.14	22.15	476	1628	0.019	0.128	27
+P17	0.13	0	3391	2272	0.135	0.019	53
+Participant,Question,TTFF_2012,TTFF_answers,Dwell_2012,Dwell_answers,Dwell_ratio_2012,Dwell_ratio_answers,Transitions,Transitions_per_sec,Sequence_length,First_AOI,Irrelevant_Ratio
+Participant17new,11,,0.0,0,2272.0,0,0.09045119260414995,32,1.2739360643337712,33,answers,0.15400000294603355

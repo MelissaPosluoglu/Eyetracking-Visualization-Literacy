@@ -18,7 +18,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "results", "testA")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Participants included in the analysis
-PARTICIPANTS = ["Participant4"]
+PARTICIPANTS = ["Participant1"]
 
 # ============================================================
 # AOIs FOR QUESTION 11

@@ -19,7 +19,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "results", "testA")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Participants included in the analysis
-PARTICIPANTS = ["Participant19"]
+PARTICIPANTS = ["Participant1"]
 
 # ============================================================
 # PIE CHART SETTINGS
