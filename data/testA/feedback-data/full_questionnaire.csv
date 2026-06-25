@@ -26,4 +26,4 @@ participant,age,gender,profession,difficult,mental workload,stressed,time pressu
 25,22,female,Wirtschaftsinformatik,3,4,3,5,1,3,2,yes,near-sighted,glasses,2,1,4,1,2,midday,2,1
 26,22,male,Bauingenieur,2,3,4,4,1,4,5,no,none,none,3,1,1,1,1,evening,4,2
 27,33,male,Informatik,1,4,1,2,1,4,5,yes,near-sighted,none,2,2,3,2,3,midday,5,1
-28,22,female,Software Engineering,3,2,3,4,2,4,3,no,none,none,3,1,1,1,2,midday,2,1
+28,22,female,Software Engineering,3,2,3,4,2,4,3,yes,near-sighted,glasses,3,1,1,1,2,midday,2,1
