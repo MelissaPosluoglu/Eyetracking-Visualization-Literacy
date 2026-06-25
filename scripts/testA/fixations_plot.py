@@ -18,8 +18,8 @@ matplotlib.use("Agg")
 # ============================================================
 
 # Participant and question settings
-PARTICIPANT = "Participant17neu"
-QUESTION_ID = 5
+PARTICIPANT = "Participant28"
+QUESTION_ID = 12
 
 # Input and output paths
 DATA_FILE = os.path.join("..", "..", "data", "testA", f"{PARTICIPANT}.tsv")
