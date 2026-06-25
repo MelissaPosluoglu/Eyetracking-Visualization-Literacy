@@ -1,2 +1,2 @@
 Participant,Question,TTFF_2012,TTFF_answers,Dwell_2012,Dwell_answers,Dwell_ratio_2012,Dwell_ratio_answers,Transitions,Transitions_per_sec,Sequence_length,First_AOI,Irrelevant_Ratio
-Participant17,11,0.13,0.0,3391.0,2272.0,0.135,0.09045119433795341,53,2.109956606552809,54,answers,0.019
+Participant17,11,0.13,0.0,3391.0000000000005,2272.0,0.13500000000000004,0.09045119433795341,53,2.109956606552809,54,answers,0.019000000000000006
